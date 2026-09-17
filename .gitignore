@@ -1,0 +1,13 @@
+.gradle/
+/build/
+/app/build/
+/local.properties
+/captures/
+*.iml
+.idea/
+
+# Temporary diagnostics copied from app-private storage during device testing.
+*_main.jpg
+*_rot90.jpg
+*_rot270.jpg
+workdb.sqlite
