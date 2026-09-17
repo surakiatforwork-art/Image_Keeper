@@ -79,6 +79,10 @@ fun BranchPhotoVaultNavHost() {
                 .getStateFlow<String?>("captured_path", null)
                 .collectAsStateWithLifecycle()
                 .value
+            val capturedMirrorHorizontally = entry.savedStateHandle
+                .getStateFlow("captured_mirror_horizontally", false)
+                .collectAsStateWithLifecycle()
+                .value
             val viewModel: BranchPreviewViewModel = viewModel(
                 factory = BranchPreviewViewModel.provideFactory(
                     branchRepository = container.branchRepository,
@@ -100,8 +104,10 @@ fun BranchPhotoVaultNavHost() {
                     navController.navigate(Destination.CapturePhoto.createRoute(account, branchCode))
                 },
                 capturedTempPath = capturedTempPath,
+                capturedMirrorHorizontally = capturedMirrorHorizontally,
                 onCapturedPathConsumed = {
                     entry.savedStateHandle["captured_path"] = null
+                    entry.savedStateHandle["captured_mirror_horizontally"] = false
                 }
             )
         }
@@ -144,8 +150,12 @@ fun BranchPhotoVaultNavHost() {
                 account = account,
                 branchCode = branchCode,
                 onBack = { navController.popBackStack() },
-                onCaptured = { tempPath ->
+                onCaptured = { tempPath, mirrorHorizontally ->
                     navController.previousBackStackEntry?.savedStateHandle?.set("captured_path", tempPath)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "captured_mirror_horizontally",
+                        mirrorHorizontally
+                    )
                     navController.popBackStack()
                 }
             )

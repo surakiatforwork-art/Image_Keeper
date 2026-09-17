@@ -64,14 +64,22 @@ class ImageProcessor(private val context: Context) {
         thumbFile: File,
         mainLongEdge: Int,
         aspectRatioOption: ImageAspectRatioOption,
-        forcePortrait: Boolean = false
+        forcePortrait: Boolean = false,
+        mirrorHorizontally: Boolean = false
     ) = withContext(Dispatchers.IO) {
         val exifOrientation = ExifInterface(sourceFile.absolutePath).exifOrientation()
         val mainBitmap = decodeBitmapFromFile(sourceFile, mainLongEdge)
         val thumbBitmap = decodeBitmapFromFile(sourceFile, AppConfig.THUMB_LONG_EDGE)
 
         writeBitmap(
-            prepareBitmap(mainBitmap, exifOrientation, aspectRatioOption, mainLongEdge, forcePortrait),
+            prepareBitmap(
+                mainBitmap,
+                exifOrientation,
+                aspectRatioOption,
+                mainLongEdge,
+                forcePortrait,
+                mirrorHorizontally
+            ),
             mainFile,
             AppConfig.MAIN_QUALITY
         )
@@ -81,7 +89,8 @@ class ImageProcessor(private val context: Context) {
                 exifOrientation,
                 aspectRatioOption,
                 AppConfig.THUMB_LONG_EDGE,
-                forcePortrait
+                forcePortrait,
+                mirrorHorizontally
             ),
             thumbFile,
             AppConfig.THUMB_QUALITY
@@ -152,7 +161,8 @@ class ImageProcessor(private val context: Context) {
         exifOrientation: Int,
         aspectRatioOption: ImageAspectRatioOption,
         longEdge: Int,
-        forcePortrait: Boolean
+        forcePortrait: Boolean,
+        mirrorHorizontally: Boolean = false
     ): Bitmap {
         val oriented = applyExifOrientation(bitmap, exifOrientation)
         val normalized = if (forcePortrait) {
@@ -160,12 +170,17 @@ class ImageProcessor(private val context: Context) {
         } else {
             oriented
         }
+        val mirrored = if (mirrorHorizontally) {
+            mirrorBitmap(normalized)
+        } else {
+            normalized
+        }
         val resolvedAspectRatio = if (forcePortrait) {
-            resolvePortraitAspectRatio(normalized, aspectRatioOption)
+            resolvePortraitAspectRatio(mirrored, aspectRatioOption)
         } else {
             aspectRatioOption
         }
-        val cropped = cropToAspectRatio(normalized, resolvedAspectRatio)
+        val cropped = cropToAspectRatio(mirrored, resolvedAspectRatio)
         return scaleBitmap(cropped, longEdge)
     }
 
@@ -262,6 +277,11 @@ class ImageProcessor(private val context: Context) {
         }
 
         val matrix = Matrix().apply { setRotate(-90f) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun mirrorBitmap(bitmap: Bitmap): Bitmap {
+        val matrix = Matrix().apply { setScale(-1f, 1f) }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 

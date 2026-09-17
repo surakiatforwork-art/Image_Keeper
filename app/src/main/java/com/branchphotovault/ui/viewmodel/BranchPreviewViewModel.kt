@@ -132,7 +132,12 @@ class BranchPreviewViewModel(
         }
     }
 
-    fun saveCapturedPhoto(tempFilePath: String, routeAtCapture: Int?, note: String?) {
+    fun saveCapturedPhoto(
+        tempFilePath: String,
+        routeAtCapture: Int?,
+        note: String?,
+        mirrorHorizontally: Boolean
+    ) {
         val branch = uiState.value.branch ?: return
 
         viewModelScope.launch {
@@ -142,7 +147,8 @@ class BranchPreviewViewModel(
                     branch = branch,
                     tempFilePath = tempFilePath,
                     routeAtCapture = routeAtCapture,
-                    note = note
+                    note = note,
+                    mirrorHorizontally = mirrorHorizontally
                 )
                 message.value = "Photo saved."
             } catch (error: Exception) {

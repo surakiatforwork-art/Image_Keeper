@@ -78,6 +78,7 @@ fun BranchPreviewScreen(
     onOpenPhoto: (photoId: String) -> Unit,
     onOpenCamera: () -> Unit,
     capturedTempPath: String?,
+    capturedMirrorHorizontally: Boolean,
     onCapturedPathConsumed: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -122,12 +123,13 @@ fun BranchPreviewScreen(
         viewModel.clearMessage()
     }
 
-    LaunchedEffect(capturedTempPath) {
+    LaunchedEffect(capturedTempPath, capturedMirrorHorizontally) {
         if (!capturedTempPath.isNullOrBlank()) {
             viewModel.saveCapturedPhoto(
                 tempFilePath = capturedTempPath,
                 routeAtCapture = defaultRouteAtCapture,
-                note = null
+                note = null,
+                mirrorHorizontally = capturedMirrorHorizontally
             )
             onCapturedPathConsumed()
         }

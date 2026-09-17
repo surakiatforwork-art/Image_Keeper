@@ -11,6 +11,7 @@ import com.branchphotovault.data.local.PhotoDao
 import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.data.model.ImageAspectRatioOption
 import com.branchphotovault.data.model.ExportSummary
+import com.branchphotovault.util.AppConfig
 import com.branchphotovault.util.DateTimeUtils
 import com.branchphotovault.util.FileStorageManager
 import com.branchphotovault.util.ImageProcessor
@@ -73,11 +74,10 @@ class PhotoRepository(
         branch: BranchEntity,
         tempFilePath: String,
         routeAtCapture: Int?,
-        note: String?
+        note: String?,
+        mirrorHorizontally: Boolean
     ): PhotoEntity = withContext(Dispatchers.IO) {
         val sourceFile = File(tempFilePath)
-        val imageLongEdge = settingsRepository.getImageLongEdge()
-        val aspectRatioOption = ImageAspectRatioOption.fromKey(settingsRepository.getImageAspectRatioKey())
         try {
             savePhoto(
                 branch = branch,
@@ -88,9 +88,10 @@ class PhotoRepository(
                     sourceFile = sourceFile,
                     mainFile = mainFile,
                     thumbFile = thumbFile,
-                    mainLongEdge = imageLongEdge,
-                    aspectRatioOption = aspectRatioOption,
-                    forcePortrait = true
+                    mainLongEdge = AppConfig.CAMERA_CAPTURE_LONG_EDGE,
+                    aspectRatioOption = ImageAspectRatioOption.RATIO_3_4,
+                    forcePortrait = true,
+                    mirrorHorizontally = mirrorHorizontally
                 )
             }
         } finally {

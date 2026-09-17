@@ -11,3 +11,6 @@
 *_rot90.jpg
 *_rot270.jpg
 workdb.sqlite
+
+# Local source repositories used only for implementation reference.
+_reference/

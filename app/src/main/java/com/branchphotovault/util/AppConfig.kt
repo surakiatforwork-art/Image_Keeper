@@ -16,6 +16,7 @@ object AppConfig {
     const val FOLDER_CAPTURE_TEMP = "capture_temp"
 
     const val MAIN_LONG_EDGE = 2560
+    const val CAMERA_CAPTURE_LONG_EDGE = 1600
     const val THUMB_LONG_EDGE = 512
     const val MAIN_QUALITY = 92
     const val THUMB_QUALITY = 80
