@@ -10,11 +10,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        // Keep this identifier stable: Android uses it to retain installed app data on updates.
         applicationId = "com.branchphotovault"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
