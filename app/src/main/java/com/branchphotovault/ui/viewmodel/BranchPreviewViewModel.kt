@@ -11,6 +11,7 @@ import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.data.model.ExportProgress
 import com.branchphotovault.data.repository.BranchRepository
 import com.branchphotovault.data.repository.PhotoRepository
+import com.branchphotovault.integration.GhostShiftSender
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,7 @@ import kotlinx.coroutines.launch
 data class BranchPreviewUiState(
     val branch: BranchEntity? = null,
     val photos: List<PhotoEntity> = emptyList(),
-    val selectedPhotoIds: Set<String> = emptySet(),
+    val selectedPhotoIds: List<String> = emptyList(),
     val isProcessing: Boolean = false,
     val exportProgress: ExportProgress? = null,
     val message: String? = null
@@ -39,7 +40,7 @@ class BranchPreviewViewModel(
     private data class ContentState(
         val branch: BranchEntity?,
         val photos: List<PhotoEntity>,
-        val selectedPhotoIds: Set<String>
+        val selectedPhotoIds: List<String>
     )
 
     private data class StatusState(
@@ -48,7 +49,8 @@ class BranchPreviewViewModel(
         val message: String?
     )
 
-    private val selectedPhotoIds = MutableStateFlow<Set<String>>(emptySet())
+    // A list intentionally preserves the order in which the user selected photos.
+    private val selectedPhotoIds = MutableStateFlow<List<String>>(emptyList())
     private val isProcessing = MutableStateFlow(false)
     private val exportProgress = MutableStateFlow<ExportProgress?>(null)
     private val message = MutableStateFlow<String?>(null)
@@ -61,7 +63,7 @@ class BranchPreviewViewModel(
         photosFlow,
         selectedPhotoIds
     ) { branch, photos, selectedIds ->
-        val validIds = selectedIds.filterTo(mutableSetOf()) { selectedId ->
+        val validIds = selectedIds.filter { selectedId ->
             photos.any { it.id == selectedId }
         }
         ContentState(
@@ -108,7 +110,7 @@ class BranchPreviewViewModel(
     }
 
     fun clearSelection() {
-        selectedPhotoIds.value = emptySet()
+        selectedPhotoIds.value = emptyList()
     }
 
     fun importPhoto(sourceUri: Uri, routeAtCapture: Int?, note: String?) {
@@ -180,8 +182,19 @@ class BranchPreviewViewModel(
         if (selectedIds.isEmpty()) return
 
         exportToGallery(
-            photos = uiState.value.photos.filter { it.id in selectedIds }
+            photos = photosInSelectionOrder(selectedIds)
         )
+    }
+
+    fun sendSelectedToGhostShift(context: Context) {
+        val photos = photosInSelectionOrder(uiState.value.selectedPhotoIds)
+        if (photos.isEmpty()) return
+        val sent = GhostShiftSender.send(context, photos)
+        message.value = if (sent) {
+            "Sent ${photos.size} photo(s) to GhostShift."
+        } else {
+            "GhostShift is not installed or a selected image is unavailable."
+        }
     }
 
     fun saveAllToGallery() {
@@ -201,7 +214,7 @@ class BranchPreviewViewModel(
             isProcessing.value = true
             try {
                 val removed = photoRepository.deletePhotos(selected)
-                selectedPhotoIds.value = emptySet()
+                selectedPhotoIds.value = emptyList()
                 message.value = "Deleted $removed photo(s)."
             } catch (error: Exception) {
                 message.value = error.message ?: "Delete failed."
@@ -268,6 +281,11 @@ class BranchPreviewViewModel(
                 isProcessing.value = false
             }
         }
+    }
+
+    private fun photosInSelectionOrder(selectedIds: List<String>): List<PhotoEntity> {
+        val photosById = uiState.value.photos.associateBy { it.id }
+        return selectedIds.mapNotNull(photosById::get)
     }
 
     companion object {

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.data.repository.PhotoRepository
+import com.branchphotovault.integration.GhostShiftSender
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -73,6 +74,15 @@ class PhotoViewerViewModel(
             } finally {
                 isSavingToGallery.value = false
             }
+        }
+    }
+
+    fun sendPhotoToGhostShift(context: android.content.Context, photo: PhotoEntity) {
+        val sent = GhostShiftSender.send(context, listOf(photo))
+        message.value = if (sent) {
+            "Photo sent to GhostShift."
+        } else {
+            "GhostShift is not installed or the image is unavailable."
         }
     }
 

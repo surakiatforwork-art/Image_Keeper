@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.AlertDialog
@@ -221,6 +222,9 @@ fun BranchPreviewScreen(
                     if (uiState.selectedPhotoIds.isNotEmpty()) {
                         IconButton(onClick = viewModel::saveSelectedToGallery) {
                             Icon(Icons.Rounded.Download, contentDescription = "Save selected to gallery")
+                        }
+                        IconButton(onClick = { viewModel.sendSelectedToGhostShift(context) }) {
+                            Icon(Icons.Rounded.Send, contentDescription = "Send selected to GhostShift")
                         }
                         IconButton(onClick = { showDeleteConfirmation = true }) {
                             Icon(Icons.Rounded.Delete, contentDescription = "Delete selected")

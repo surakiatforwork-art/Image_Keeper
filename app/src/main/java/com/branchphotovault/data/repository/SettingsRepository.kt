@@ -24,6 +24,7 @@ class SettingsRepository(private val context: Context) {
         val lastSyncAt = longPreferencesKey("last_sync_at")
         val imageLongEdge = intPreferencesKey("image_long_edge")
         val imageAspectRatioKey = stringPreferencesKey("image_aspect_ratio_key")
+        val lastCameraLensFacing = intPreferencesKey("last_camera_lens_facing")
     }
 
     val baseUrlFlow: Flow<String> = context.settingsDataStore.data.map { preferences ->
@@ -50,6 +51,11 @@ class SettingsRepository(private val context: Context) {
         preferences[Keys.imageAspectRatioKey] ?: ImageAspectRatioOption.ORIGINAL.key
     }
 
+    // CameraX values: 0 is front and 1 is back. Front preserves the existing first-use default.
+    val lastCameraLensFacingFlow: Flow<Int> = context.settingsDataStore.data.map { preferences ->
+        preferences[Keys.lastCameraLensFacing] ?: 0
+    }
+
     suspend fun getBaseUrl(): String = baseUrlFlow.first()
 
     suspend fun getRetentionMonths(): Int = retentionMonthsFlow.first()
@@ -59,6 +65,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun getImageLongEdge(): Int = imageLongEdgeFlow.first()
 
     suspend fun getImageAspectRatioKey(): String = imageAspectRatioKeyFlow.first()
+
+    suspend fun getLastCameraLensFacing(): Int = lastCameraLensFacingFlow.first()
 
     suspend fun setBaseUrl(value: String) {
         context.settingsDataStore.edit { preferences ->
@@ -95,6 +103,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setImageAspectRatioKey(key: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[Keys.imageAspectRatioKey] = ImageAspectRatioOption.fromKey(key).key
+        }
+    }
+
+    suspend fun setLastCameraLensFacing(lensFacing: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Keys.lastCameraLensFacing] = lensFacing
         }
     }
 }

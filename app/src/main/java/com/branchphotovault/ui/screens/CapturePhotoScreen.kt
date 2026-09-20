@@ -127,6 +127,8 @@ fun CapturePhotoScreen(
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
+        // Wait for the persisted value instead of using a temporary front-camera default.
+        lensFacing = container.settingsRepository.getLastCameraLensFacing()
     }
 
     LaunchedEffect(lensFacing, hasCameraPermission) {
@@ -201,6 +203,9 @@ fun CapturePhotoScreen(
                                     CameraSelector.LENS_FACING_BACK
                                 } else {
                                     CameraSelector.LENS_FACING_FRONT
+                                }
+                                coroutineScope.launch {
+                                    container.settingsRepository.setLastCameraLensFacing(lensFacing)
                                 }
                             },
                             enabled = !captureLocked
