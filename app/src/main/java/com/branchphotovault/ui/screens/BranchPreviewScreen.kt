@@ -89,6 +89,7 @@ fun BranchPreviewScreen(
 
     val defaultRouteAtCapture = uiState.branch?.currentRoute
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showSendConfirmation by remember { mutableStateOf(false) }
     var routeEditorVisible by remember { mutableStateOf(false) }
     var routeDraft by remember(uiState.branch?.currentRoute, routeEditorVisible) {
         mutableStateOf(uiState.branch?.currentRoute?.toString().orEmpty())
@@ -170,6 +171,24 @@ fun BranchPreviewScreen(
         )
     }
 
+    if (showSendConfirmation) {
+        val selectedCount = uiState.selectedPhotoIds.size
+        AlertDialog(
+            onDismissRequest = { showSendConfirmation = false },
+            title = { Text("Send to GhostShift") },
+            text = { Text("Send $selectedCount selected photo(s) to GhostShift in the selected order?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSendConfirmation = false
+                    viewModel.sendSelectedToGhostShift(context)
+                }) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSendConfirmation = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     if (routeEditorVisible) {
         AlertDialog(
             onDismissRequest = { routeEditorVisible = false },
@@ -223,7 +242,7 @@ fun BranchPreviewScreen(
                         IconButton(onClick = viewModel::saveSelectedToGallery) {
                             Icon(Icons.Rounded.Download, contentDescription = "Save selected to gallery")
                         }
-                        IconButton(onClick = { viewModel.sendSelectedToGhostShift(context) }) {
+                        IconButton(onClick = { showSendConfirmation = true }) {
                             Icon(Icons.Rounded.Send, contentDescription = "Send selected to GhostShift")
                         }
                         IconButton(onClick = { showDeleteConfirmation = true }) {

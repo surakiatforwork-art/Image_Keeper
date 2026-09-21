@@ -62,6 +62,7 @@ fun PhotoViewerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var initialPageApplied by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showSendConfirmation by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
@@ -109,6 +110,23 @@ fun PhotoViewerScreen(
                 TextButton(onClick = { showDeleteConfirmation = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showSendConfirmation && currentPhoto != null) {
+        AlertDialog(
+            onDismissRequest = { showSendConfirmation = false },
+            title = { Text("Send to GhostShift") },
+            text = { Text("Send this photo directly to GhostShift?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSendConfirmation = false
+                    viewModel.sendPhotoToGhostShift(context, currentPhoto)
+                }) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSendConfirmation = false }) { Text("Cancel") }
             }
         )
     }
@@ -196,7 +214,7 @@ fun PhotoViewerScreen(
                                 Text("Save to Gallery")
                             }
                             FilledTonalButton(
-                                onClick = { viewModel.sendPhotoToGhostShift(context, photo) },
+                                onClick = { showSendConfirmation = true },
                                 enabled = !uiState.isSavingToGallery && !uiState.isDeleting,
                                 modifier = Modifier.weight(1f)
                             ) {
