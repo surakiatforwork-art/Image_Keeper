@@ -29,7 +29,9 @@ class AddBranchViewModel(
     val uiState: StateFlow<AddBranchUiState> = _uiState.asStateFlow()
 
     fun updateAccount(value: String) {
-        _uiState.update { it.copy(account = value) }
+        if (value in ACCOUNTS) {
+            _uiState.update { it.copy(account = value) }
+        }
     }
 
     fun updateBranchCode(value: String) {
@@ -48,8 +50,8 @@ class AddBranchViewModel(
 
     fun submit() {
         val snapshot = _uiState.value
-        if (snapshot.account.isBlank() || snapshot.branchCode.isBlank() || snapshot.shopName.isBlank()) {
-            _uiState.update { it.copy(message = "Account, branch code, and shop name are required.") }
+        if (snapshot.account !in ACCOUNTS || snapshot.branchCode.isBlank() || snapshot.shopName.isBlank()) {
+            _uiState.update { it.copy(message = "Choose an Account, then enter branch code and shop name.") }
             return
         }
 
@@ -91,6 +93,16 @@ class AddBranchViewModel(
     }
 
     companion object {
+        val ACCOUNTS = listOf(
+            "7-ELEVEN",
+            "BIGCMINI",
+            "CJ MORE",
+            "JIFFY",
+            "LAWSON",
+            "LOTUS'S GO FRESH",
+            "TOPS DAILY"
+        )
+
         fun provideFactory(branchRepository: BranchRepository): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -101,4 +113,3 @@ class AddBranchViewModel(
         }
     }
 }
-

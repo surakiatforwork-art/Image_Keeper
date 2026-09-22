@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -17,11 +19,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +41,7 @@ fun AddBranchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var accountMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
@@ -70,13 +76,37 @@ fun AddBranchScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(
-                value = uiState.account,
-                onValueChange = viewModel::updateAccount,
-                label = { Text("Account") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+            ExposedDropdownMenuBox(
+                expanded = accountMenuExpanded,
+                onExpandedChange = { accountMenuExpanded = !accountMenuExpanded }
+            ) {
+                OutlinedTextField(
+                    value = uiState.account,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Account") },
+                    placeholder = { Text("Select Account") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountMenuExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    singleLine = true
+                )
+                ExposedDropdownMenu(
+                    expanded = accountMenuExpanded,
+                    onDismissRequest = { accountMenuExpanded = false }
+                ) {
+                    AddBranchViewModel.ACCOUNTS.forEach { account ->
+                        DropdownMenuItem(
+                            text = { Text(account) },
+                            onClick = {
+                                viewModel.updateAccount(account)
+                                accountMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
             OutlinedTextField(
                 value = uiState.branchCode,
                 onValueChange = viewModel::updateBranchCode,
