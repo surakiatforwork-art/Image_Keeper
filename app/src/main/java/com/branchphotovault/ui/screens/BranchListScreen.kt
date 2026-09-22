@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.branchphotovault.data.model.BranchSortOption
 import com.branchphotovault.ui.components.BranchListItemCard
+import com.branchphotovault.ui.viewmodel.AddBranchViewModel
 import com.branchphotovault.ui.viewmodel.BranchListViewModel
 import java.util.Date
 
@@ -99,6 +100,7 @@ fun BranchListScreen(
             uiState = uiState,
             modifier = Modifier.padding(innerPadding),
             onSearchChange = viewModel::updateSearch,
+            onAccountFilterChange = viewModel::updateAccountFilter,
             onSortChange = viewModel::updateSortOption,
             onBranchClick = onOpenBranch
         )
@@ -111,9 +113,11 @@ private fun BranchListContent(
     uiState: com.branchphotovault.ui.viewmodel.BranchListUiState,
     modifier: Modifier = Modifier,
     onSearchChange: (String) -> Unit,
+    onAccountFilterChange: (String?) -> Unit,
     onSortChange: (BranchSortOption) -> Unit,
     onBranchClick: (account: String, branchCode: String) -> Unit
 ) {
+    var accountExpanded by remember { mutableStateOf(false) }
     var sortExpanded by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -131,10 +135,51 @@ private fun BranchListContent(
                     singleLine = true
                 )
 
-                ExposedDropdownMenuBox(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = accountExpanded,
+                        onExpandedChange = { accountExpanded = !accountExpanded },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        OutlinedTextField(
+                            value = uiState.selectedAccount ?: "All Accounts",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Account") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = accountExpanded,
+                            onDismissRequest = { accountExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Accounts") },
+                                onClick = {
+                                    onAccountFilterChange(null)
+                                    accountExpanded = false
+                                }
+                            )
+                            AddBranchViewModel.ACCOUNTS.forEach { account ->
+                                DropdownMenuItem(
+                                    text = { Text(account) },
+                                    onClick = {
+                                        onAccountFilterChange(account)
+                                        accountExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    ExposedDropdownMenuBox(
                         expanded = sortExpanded,
                         onExpandedChange = { sortExpanded = !sortExpanded },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
                             value = uiState.sortOption.label,
@@ -161,6 +206,7 @@ private fun BranchListContent(
                             }
                         }
                     }
+                }
 
                 val lastSyncText = uiState.lastSyncAt?.let {
                     DateFormat.getMediumDateFormat(androidx.compose.ui.platform.LocalContext.current)

@@ -21,13 +21,13 @@ class BranchRepository(
 
     fun observeBranches(
         searchText: String,
-        routeFilter: Int?,
+        accountFilter: String?,
         sortOption: BranchSortOption
     ): Flow<List<BranchListItem>> {
         return branchDao.observeBranchListItems(
             BranchQueryBuilder.build(
                 searchText = searchText,
-                routeFilter = routeFilter,
+                accountFilter = accountFilter,
                 sortOption = sortOption
             )
         )

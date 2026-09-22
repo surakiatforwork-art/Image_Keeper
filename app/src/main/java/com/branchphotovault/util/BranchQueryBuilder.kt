@@ -8,7 +8,7 @@ object BranchQueryBuilder {
 
     fun build(
         searchText: String,
-        routeFilter: Int?,
+        accountFilter: String?,
         sortOption: BranchSortOption
     ): SupportSQLiteQuery {
         val sql = StringBuilder(
@@ -48,9 +48,9 @@ object BranchQueryBuilder {
             args += like
         }
 
-        if (routeFilter != null) {
-            sql.append("\nAND b.currentRoute = ?")
-            args += routeFilter
+        if (accountFilter != null) {
+            sql.append("\nAND b.account = ?")
+            args += accountFilter
         }
 
         sql.append(
@@ -74,4 +74,3 @@ object BranchQueryBuilder {
         return SimpleSQLiteQuery(sql.toString(), args.toTypedArray())
     }
 }
-

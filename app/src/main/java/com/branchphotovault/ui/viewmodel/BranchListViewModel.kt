@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 data class BranchListUiState(
     val searchText: String = "",
+    val selectedAccount: String? = null,
     val sortOption: BranchSortOption = BranchSortOption.ROUTE,
     val branches: List<BranchListItem> = emptyList(),
     val lastSyncAt: Long? = null,
@@ -34,34 +35,38 @@ class BranchListViewModel(
 
     private data class InputsState(
         val searchText: String,
+        val selectedAccount: String?,
         val sortOption: BranchSortOption,
         val isSyncing: Boolean,
         val message: String?
     )
 
     private val searchText = MutableStateFlow("")
+    private val selectedAccount = MutableStateFlow<String?>(null)
     private val sortOption = MutableStateFlow(BranchSortOption.ROUTE)
     private val isSyncing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
 
-    private val branchesFlow = combine(searchText, sortOption) { search, sort ->
-        search to sort
-    }.flatMapLatest { (search, sort) ->
+    private val branchesFlow = combine(searchText, selectedAccount, sortOption) { search, account, sort ->
+        Triple(search, account, sort)
+    }.flatMapLatest { (search, account, sort) ->
         branchRepository.observeBranches(
             searchText = search,
-            routeFilter = null,
+            accountFilter = account,
             sortOption = sort
         )
     }
 
     private val inputsFlow = combine(
         searchText,
+        selectedAccount,
         sortOption,
         isSyncing,
         message
-    ) { search, sort, syncing, userMessage ->
+    ) { search, account, sort, syncing, userMessage ->
         InputsState(
             searchText = search,
+            selectedAccount = account,
             sortOption = sort,
             isSyncing = syncing,
             message = userMessage
@@ -75,6 +80,7 @@ class BranchListViewModel(
     ) { inputs, branches, lastSyncAt ->
         BranchListUiState(
             searchText = inputs.searchText,
+            selectedAccount = inputs.selectedAccount,
             sortOption = inputs.sortOption,
             branches = branches,
             lastSyncAt = lastSyncAt,
@@ -89,6 +95,10 @@ class BranchListViewModel(
 
     fun updateSearch(value: String) {
         searchText.value = value
+    }
+
+    fun updateAccountFilter(value: String?) {
+        selectedAccount.value = value
     }
 
     fun updateSortOption(value: BranchSortOption) {
