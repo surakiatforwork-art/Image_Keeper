@@ -99,7 +99,6 @@ fun BranchListScreen(
             uiState = uiState,
             modifier = Modifier.padding(innerPadding),
             onSearchChange = viewModel::updateSearch,
-            onRouteFilterChange = viewModel::updateRouteFilter,
             onSortChange = viewModel::updateSortOption,
             onBranchClick = onOpenBranch
         )
@@ -112,11 +111,9 @@ private fun BranchListContent(
     uiState: com.branchphotovault.ui.viewmodel.BranchListUiState,
     modifier: Modifier = Modifier,
     onSearchChange: (String) -> Unit,
-    onRouteFilterChange: (Int?) -> Unit,
     onSortChange: (BranchSortOption) -> Unit,
     onBranchClick: (account: String, branchCode: String) -> Unit
 ) {
-    var routeExpanded by remember { mutableStateOf(false) }
     var sortExpanded by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -134,52 +131,10 @@ private fun BranchListContent(
                     singleLine = true
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ExposedDropdownMenuBox(
-                        expanded = routeExpanded,
-                        onExpandedChange = { routeExpanded = !routeExpanded },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
-                            value = uiState.selectedRoute?.let { "Route $it" } ?: "All Routes",
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Route") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = routeExpanded) },
-                                modifier = Modifier
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                    .fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = routeExpanded,
-                            onDismissRequest = { routeExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("All Routes") },
-                                onClick = {
-                                    onRouteFilterChange(null)
-                                    routeExpanded = false
-                                }
-                            )
-                            uiState.availableRoutes.forEach { route ->
-                                DropdownMenuItem(
-                                    text = { Text("Route $route") },
-                                    onClick = {
-                                        onRouteFilterChange(route)
-                                        routeExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    ExposedDropdownMenuBox(
+                ExposedDropdownMenuBox(
                         expanded = sortExpanded,
                         onExpandedChange = { sortExpanded = !sortExpanded },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         OutlinedTextField(
                             value = uiState.sortOption.label,
@@ -206,7 +161,6 @@ private fun BranchListContent(
                             }
                         }
                     }
-                }
 
                 val lastSyncText = uiState.lastSyncAt?.let {
                     DateFormat.getMediumDateFormat(androidx.compose.ui.platform.LocalContext.current)
@@ -235,7 +189,7 @@ private fun BranchListContent(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Sync the sheet or adjust your filters.",
+                        text = "Sync the sheet or try a different search.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }

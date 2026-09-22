@@ -1,16 +1,20 @@
 package com.branchphotovault.ui.theme
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
 private val LightColors = lightColorScheme(
     primary = VaultGreen,
     secondary = MossGreen,
     tertiary = Amber,
     background = Cream,
-    surface = Cream,
+    surface = CardWhite,
+    surfaceVariant = Mist,
+    outline = MintOutline,
     onPrimary = Cream,
     onSecondary = Cream,
     onTertiary = Slate,
@@ -19,18 +23,12 @@ private val LightColors = lightColorScheme(
     error = Danger
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Amber,
-    secondary = MossGreen,
-    tertiary = Cream,
-    background = Slate,
-    surface = Slate,
-    onPrimary = Slate,
-    onSecondary = Cream,
-    onTertiary = Slate,
-    onBackground = Cream,
-    onSurface = Cream,
-    error = Danger
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(22.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(32.dp)
 )
 
 @Composable
@@ -39,9 +37,9 @@ fun BranchPhotoVaultTheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = LightColors,
         typography = AppTypography,
+        shapes = AppShapes,
         content = content
     )
 }
-

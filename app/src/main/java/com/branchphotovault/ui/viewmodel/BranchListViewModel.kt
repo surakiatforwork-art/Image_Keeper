@@ -19,10 +19,8 @@ import kotlinx.coroutines.launch
 
 data class BranchListUiState(
     val searchText: String = "",
-    val selectedRoute: Int? = null,
     val sortOption: BranchSortOption = BranchSortOption.ROUTE,
     val branches: List<BranchListItem> = emptyList(),
-    val availableRoutes: List<Int> = emptyList(),
     val lastSyncAt: Long? = null,
     val isSyncing: Boolean = false,
     val message: String? = null
@@ -36,38 +34,34 @@ class BranchListViewModel(
 
     private data class InputsState(
         val searchText: String,
-        val selectedRoute: Int?,
         val sortOption: BranchSortOption,
         val isSyncing: Boolean,
         val message: String?
     )
 
     private val searchText = MutableStateFlow("")
-    private val selectedRoute = MutableStateFlow<Int?>(null)
     private val sortOption = MutableStateFlow(BranchSortOption.ROUTE)
     private val isSyncing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
 
-    private val branchesFlow = combine(searchText, selectedRoute, sortOption) { search, route, sort ->
-        Triple(search, route, sort)
-    }.flatMapLatest { (search, route, sort) ->
+    private val branchesFlow = combine(searchText, sortOption) { search, sort ->
+        search to sort
+    }.flatMapLatest { (search, sort) ->
         branchRepository.observeBranches(
             searchText = search,
-            routeFilter = route,
+            routeFilter = null,
             sortOption = sort
         )
     }
 
     private val inputsFlow = combine(
         searchText,
-        selectedRoute,
         sortOption,
         isSyncing,
         message
-    ) { search, route, sort, syncing, userMessage ->
+    ) { search, sort, syncing, userMessage ->
         InputsState(
             searchText = search,
-            selectedRoute = route,
             sortOption = sort,
             isSyncing = syncing,
             message = userMessage
@@ -77,15 +71,12 @@ class BranchListViewModel(
     val uiState: StateFlow<BranchListUiState> = combine(
         inputsFlow,
         branchesFlow,
-        branchRepository.observeAvailableRoutes(),
         settingsRepository.lastSyncAtFlow
-    ) { inputs, branches, routes, lastSyncAt ->
+    ) { inputs, branches, lastSyncAt ->
         BranchListUiState(
             searchText = inputs.searchText,
-            selectedRoute = inputs.selectedRoute,
             sortOption = inputs.sortOption,
             branches = branches,
-            availableRoutes = routes,
             lastSyncAt = lastSyncAt,
             isSyncing = inputs.isSyncing,
             message = inputs.message
@@ -98,10 +89,6 @@ class BranchListViewModel(
 
     fun updateSearch(value: String) {
         searchText.value = value
-    }
-
-    fun updateRouteFilter(value: Int?) {
-        selectedRoute.value = value
     }
 
     fun updateSortOption(value: BranchSortOption) {
