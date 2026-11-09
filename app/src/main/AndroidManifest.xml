@@ -8,6 +8,7 @@
     <!-- Android 11+ requires this declaration before resolveActivity can find GhostShift. -->
     <queries>
         <package android:name="com.phantom.ghostshift" />
+        <package android:name="com.example.timestamp" />
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="image/*" />

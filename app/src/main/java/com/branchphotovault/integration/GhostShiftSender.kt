@@ -13,7 +13,7 @@ object GhostShiftSender {
 
     const val EXTRA_REMARKS = "com.phantom.ghostshift.EXTRA_REMARKS"
 
-    fun send(context: Context, photos: List<PhotoEntity>): Boolean {
+    fun send(context: Context, photos: List<PhotoEntity>, toTimestamp: Boolean = false): Boolean {
         if (photos.isEmpty()) return false
         val uris = ArrayList(photos.mapNotNull { photo ->
             File(photo.localMainPath).takeIf(File::exists)?.let { file ->
@@ -27,7 +27,7 @@ object GhostShiftSender {
         })
         val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
             type = "image/jpeg"
-            setPackage(GHOST_SHIFT_PACKAGE)
+            setPackage(if (toTimestamp) "com.example.timestamp" else GHOST_SHIFT_PACKAGE)
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
             putStringArrayListExtra(EXTRA_REMARKS, remarks)
             clipData = ClipData.newUri(context.contentResolver, "GhostShift photo", uris.first())

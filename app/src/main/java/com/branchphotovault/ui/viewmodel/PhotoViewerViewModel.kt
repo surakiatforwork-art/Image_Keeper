@@ -77,12 +77,13 @@ class PhotoViewerViewModel(
         }
     }
 
-    fun sendPhotoToGhostShift(context: android.content.Context, photo: PhotoEntity) {
-        val sent = GhostShiftSender.send(context, listOf(photo))
+    fun sendPhotoToGhostShift(context: android.content.Context, photo: PhotoEntity, toTimestamp: Boolean = false) {
+        val sent = GhostShiftSender.send(context, listOf(photo), toTimestamp)
+        val destination = if (toTimestamp) "Timestamp" else "GhostShift"
         message.value = if (sent) {
-            "Photo sent to GhostShift."
+            "Photo sent to $destination."
         } else {
-            "GhostShift is not installed or the image is unavailable."
+            "$destination is not installed or the image is unavailable."
         }
     }
 

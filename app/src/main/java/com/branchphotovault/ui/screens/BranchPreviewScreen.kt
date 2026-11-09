@@ -176,8 +176,8 @@ fun BranchPreviewScreen(
         val selectedCount = uiState.selectedPhotoIds.size
         AlertDialog(
             onDismissRequest = { showSendConfirmation = false },
-            title = { Text("Send to GhostShift") },
-            text = { Text("Send $selectedCount selected photo(s) to GhostShift in the selected order?") },
+            title = { Text("Send photos") },
+            text = { Text("Choose where to send $selectedCount selected photo(s) in the selected order.") },
             confirmButton = {
                 TextButton(onClick = {
                     showSendConfirmation = false
@@ -185,6 +185,10 @@ fun BranchPreviewScreen(
                 }) { Text("Send") }
             },
             dismissButton = {
+                TextButton(onClick = {
+                    showSendConfirmation = false
+                    viewModel.sendSelectedToGhostShift(context, toTimestamp = true)
+                }) { Text("Timestamp") }
                 TextButton(onClick = { showSendConfirmation = false }) { Text("Cancel") }
             }
         )

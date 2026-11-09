@@ -117,8 +117,8 @@ fun PhotoViewerScreen(
     if (showSendConfirmation && currentPhoto != null) {
         AlertDialog(
             onDismissRequest = { showSendConfirmation = false },
-            title = { Text("Send to GhostShift") },
-            text = { Text("Send this photo directly to GhostShift?") },
+            title = { Text("Send photos") },
+            text = { Text("Choose where to send this photo.") },
             confirmButton = {
                 TextButton(onClick = {
                     showSendConfirmation = false
@@ -126,6 +126,10 @@ fun PhotoViewerScreen(
                 }) { Text("Send") }
             },
             dismissButton = {
+                TextButton(onClick = {
+                    showSendConfirmation = false
+                    viewModel.sendPhotoToGhostShift(context, currentPhoto, toTimestamp = true)
+                }) { Text("Timestamp") }
                 TextButton(onClick = { showSendConfirmation = false }) { Text("Cancel") }
             }
         )

@@ -186,14 +186,15 @@ class BranchPreviewViewModel(
         )
     }
 
-    fun sendSelectedToGhostShift(context: Context) {
+    fun sendSelectedToGhostShift(context: Context, toTimestamp: Boolean = false) {
         val photos = photosInSelectionOrder(uiState.value.selectedPhotoIds)
         if (photos.isEmpty()) return
-        val sent = GhostShiftSender.send(context, photos)
+        val sent = GhostShiftSender.send(context, photos, toTimestamp)
+        val destination = if (toTimestamp) "Timestamp" else "GhostShift"
         message.value = if (sent) {
-            "Sent ${photos.size} photo(s) to GhostShift."
+            "Sent ${photos.size} photo(s) to $destination."
         } else {
-            "GhostShift is not installed or a selected image is unavailable."
+            "$destination is not installed or a selected image is unavailable."
         }
     }
 
