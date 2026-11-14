@@ -73,6 +73,7 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            PhotoTransferCard()
             OutlinedTextField(
                 value = uiState.baseUrl,
                 onValueChange = viewModel::updateBaseUrl,

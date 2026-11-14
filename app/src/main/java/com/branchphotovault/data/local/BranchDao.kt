@@ -1,6 +1,8 @@
 package com.branchphotovault.data.local
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Transaction
@@ -11,6 +13,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class BranchDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insertForTransfer(branch: BranchEntity): Long
 
     @RawQuery(observedEntities = [BranchEntity::class, PhotoEntity::class])
     abstract fun observeBranchListItems(query: SupportSQLiteQuery): Flow<List<BranchListItem>>

@@ -8,6 +8,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PhotoDao {
+    @Query("SELECT * FROM photos ORDER BY createdAt, id")
+    suspend fun getAllForTransfer(): List<PhotoEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertForTransfer(photo: PhotoEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(photo: PhotoEntity)
