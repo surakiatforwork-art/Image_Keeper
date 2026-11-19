@@ -1,0 +1,22 @@
+Keeper moustache retouch
+
+MI-GAN pipeline:
+https://github.com/Picsart-AI-Research/MI-GAN
+https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx
+SHA256 6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b
+See MI-GAN-LICENSE.txt (MIT, code and weights).
+
+MediaPipe Face Landmarker:
+https://github.com/google-ai-edge/mediapipe
+https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+SHA256 64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff
+See MediaPipe-LICENSE.txt (Apache 2.0).
+
+ONNX Runtime Android 1.20.0:
+https://onnxruntime.ai/
+https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.20.0
+MIT; included runtime notices must be retained.
+
+The moustache mask is a Keeper heuristic based on upper-lip landmarks,
+not a trained facial-hair segmentation model. The bundled MI-GAN pipeline
+is a general inpainting model, not a dedicated beard-removal model.

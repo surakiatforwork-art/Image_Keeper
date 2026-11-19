@@ -63,6 +63,8 @@ fun PhotoViewerScreen(
     var initialPageApplied by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showSendConfirmation by remember { mutableStateOf(false) }
+    var retouchPhoto by remember { mutableStateOf<com.branchphotovault.data.local.PhotoEntity?>(null) }
+    retouchPhoto?.let { photo -> MoustacheRetouchDialog(photo) { retouchPhoto = null } }
 
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
@@ -201,6 +203,11 @@ fun PhotoViewerScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        OutlinedButton(
+                            onClick = { retouchPhoto = photo },
+                            enabled = !uiState.isDeleting && !uiState.isSavingToGallery,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("แต่งภาพ · ลดหนวด") }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -247,6 +254,9 @@ fun PhotoViewerScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(photo.shopName, style = MaterialTheme.typography.titleMedium)
+                                if (photo.note?.contains("Retouched moustache; source=") == true) {
+                                    Text("ฉบับรีทัชหนวด · ต้นฉบับเก็บแยกไว้", color = MaterialTheme.colorScheme.primary)
+                                }
                                 Text("${photo.account} • ${photo.branchCode}")
                                 Text("Route at capture: ${photo.routeAtCapture ?: "-"}")
                                 Text(

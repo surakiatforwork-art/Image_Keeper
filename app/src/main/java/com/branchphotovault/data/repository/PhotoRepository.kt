@@ -35,6 +35,27 @@ class PhotoRepository(
 
     private val fileStorageManager = FileStorageManager(context)
 
+    suspend fun saveRetouchedCopy(source: PhotoEntity, bitmap: android.graphics.Bitmap): PhotoEntity = withContext(Dispatchers.IO) {
+        check(photoDao.getPhotoById(source.id) != null) { "Original photo no longer exists." }
+        val id = UUID.randomUUID().toString()
+        val main = fileStorageManager.createMainFile(source.account, source.branchCode, source.monthKey, id)
+        val thumb = fileStorageManager.createThumbFile(source.account, source.branchCode, source.monthKey, id)
+        try {
+            main.outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it)) }
+            val scale = minOf(1f, 512f / maxOf(bitmap.width, bitmap.height))
+            val small = android.graphics.Bitmap.createScaledBitmap(bitmap, maxOf(1, (bitmap.width * scale).toInt()), maxOf(1, (bitmap.height * scale).toInt()), true)
+            try { thumb.outputStream().use { check(small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it)) } }
+            finally { if (small !== bitmap) small.recycle() }
+            val copy = source.copy(id = id, localMainPath = main.absolutePath, localThumbPath = thumb.absolutePath,
+                note = listOfNotNull(source.note, "Retouched moustache; source=${source.id}; MI-GAN-v2").joinToString("\n"))
+            check(photoDao.insertForTransfer(copy) != -1L)
+            copy
+        } catch (error: Exception) {
+            main.delete(); thumb.delete()
+            throw error
+        }
+    }
+
     fun observePhotosForBranch(account: String, branchCode: String): Flow<List<PhotoEntity>> {
         return photoDao.observePhotosForBranch(account, branchCode)
     }
