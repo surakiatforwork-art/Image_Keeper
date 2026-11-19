@@ -105,7 +105,8 @@ class MoustacheRetoucher(private val context: Context) {
                 }
             }
         }
-        val processed = Bitmap.createBitmap(generated,512,512,Bitmap.Config.ARGB_8888)
+        val processed = Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888)
+        processed.setPixels(generated,0,512,0,0,512,512)
         // Restrict compositing to the mask, even if the model changes other pixels.
         val alpha = Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888)
         Canvas(alpha).drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; maskFilter = BlurMaskFilter(3f,BlurMaskFilter.Blur.NORMAL) })

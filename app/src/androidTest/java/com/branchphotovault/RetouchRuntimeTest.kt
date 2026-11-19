@@ -41,7 +41,19 @@ class RetouchRuntimeTest {
                 OnnxTensor.createTensor(env,ByteBuffer.wrap(rgb),longArrayOf(1,3,512,512),OnnxJavaType.UINT8).use { image ->
                     OnnxTensor.createTensor(env,ByteBuffer.wrap(mask),longArrayOf(1,1,512,512),OnnxJavaType.UINT8).use { m ->
                         session.run(mapOf("image" to image,"mask" to m)).use { result ->
-                            assertEquals(size*3,(result[0] as OnnxTensor).byteBuffer.remaining())
+                            val bytes = (result[0] as OnnxTensor).byteBuffer
+                            assertEquals(size*3,bytes.remaining())
+                            val pixels = IntArray(size) { i -> Color.rgb(
+                                bytes.get(i).toInt() and 255,
+                                bytes.get(size+i).toInt() and 255,
+                                bytes.get(size*2+i).toInt() and 255) }
+                            val processed = Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888)
+                            try {
+                                processed.setPixels(pixels,0,512,0,0,512,512)
+                                assertTrue(processed.isMutable)
+                                android.graphics.Canvas(processed).drawColor(Color.TRANSPARENT,
+                                    android.graphics.PorterDuff.Mode.DST_IN)
+                            } finally { processed.recycle() }
                         }
                     }
                 }
