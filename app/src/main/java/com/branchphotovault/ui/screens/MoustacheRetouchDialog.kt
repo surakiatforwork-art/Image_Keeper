@@ -39,7 +39,11 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
             val loaded = withContext(Dispatchers.Default) {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(photo.localMainPath,bounds)
-                val options = BitmapFactory.Options()
+                require(bounds.outWidth > 0 && bounds.outHeight > 0) { "อ่านไฟล์ภาพไม่ได้" }
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = 1
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
                 while (maxOf(bounds.outWidth,bounds.outHeight) / options.inSampleSize > 2560) options.inSampleSize *= 2
                 requireNotNull(BitmapFactory.decodeFile(photo.localMainPath,options))
             }
@@ -62,7 +66,11 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
             }
             message = if (faceCount > 0) "เลือกใบหน้า แล้วกดรีทัช · ต้นฉบับจะถูกเก็บไว้" else "ไม่พบใบหน้าในภาพ"
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { message = "เปิดภาพหรือตรวจใบหน้าไม่สำเร็จ" }
+        catch (error: Exception) {
+            android.util.Log.e("KeeperRetouch", "Image decode or face detection failed", error)
+            message = if (original == null) "เปิดภาพไม่สำเร็จ: ${error.message.orEmpty()}"
+                else "ตรวจใบหน้าไม่สำเร็จ: ${error.message.orEmpty()}"
+        }
         finally { busy = false }
     }
     BackHandler(enabled = busy) {}
