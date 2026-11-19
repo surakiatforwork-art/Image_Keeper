@@ -10,28 +10,41 @@ import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import java.nio.ByteBuffer
 
 /** Processes a bounded face crop; original file is never changed. */
+enum class RetouchRegion(val label: String) {
+    MOUSTACHE("หนวด"), BEARD("เครา"), BOTH("หนวดและเครา")
+}
+
 class MoustacheRetoucher(private val context: Context) {
     fun faces(bitmap: Bitmap): List<List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>> {
         val options = FaceLandmarker.FaceLandmarkerOptions.builder()
             .setBaseOptions(BaseOptions.builder().setModelAssetPath("retouch/face_landmarker.task").build())
             .setRunningMode(RunningMode.IMAGE).setNumFaces(5).setMinFaceDetectionConfidence(0.6f).build()
         return FaceLandmarker.createFromOptions(context, options).use { detector ->
-            val image = BitmapImageBuilder(bitmap).build()
+            // MPImage.close() owns/releases its bitmap; never pass the Compose preview.
+            val detectionBitmap = bitmap.copy(Bitmap.Config.ARGB_8888,false)
+            val image = BitmapImageBuilder(detectionBitmap).build()
             try { detector.detect(image).faceLandmarks() } finally { image.close() }
         }
     }
 
-    fun process(bitmap: Bitmap, faceIndex: Int): Bitmap {
+    fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH): Bitmap {
         val face = faces(bitmap).getOrNull(faceIndex) ?: error("ไม่พบใบหน้า กรุณาเลือกภาพที่เห็นใบหน้าชัดเจน")
         fun point(i: Int) = PointF(face[i].x() * bitmap.width, face[i].y() * bitmap.height)
         val left = point(61); val right = point(291); val nose = point(2); val lip = point(0)
         val span = kotlin.math.hypot(right.x - left.x, right.y - left.y)
         require(span >= 25 && lip.y > nose.y) { "ใบหน้าเล็กหรือเอียงเกินไป กรุณาใช้ภาพหน้าตรง" }
-        val bounds = Rect(
+        val jaw = listOf(234,93,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,323,454)
+        val bounds = if (region == RetouchRegion.MOUSTACHE) Rect(
             (minOf(left.x, right.x) - span * 0.7f).toInt().coerceAtLeast(0),
             (nose.y - span * 0.6f).toInt().coerceAtLeast(0),
             (maxOf(left.x, right.x) + span * 0.7f).toInt().coerceAtMost(bitmap.width),
             (lip.y + span * 0.6f).toInt().coerceAtMost(bitmap.height))
+        else Rect(
+            (jaw.minOf { point(it).x } - span * 0.2f).toInt().coerceAtLeast(0),
+            (nose.y - span * 0.5f).toInt().coerceAtLeast(0),
+            (jaw.maxOf { point(it).x } + span * 0.2f).toInt().coerceAtMost(bitmap.width),
+            (point(152).y + span * 0.25f).toInt().coerceAtMost(bitmap.height))
+        require(bounds.width() > 0 && bounds.height() > 0) { "ใบหน้าอยู่นอกขอบภาพ" }
         val crop = Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height())
         val input = Bitmap.createScaledBitmap(crop, 512, 512, true).copy(Bitmap.Config.ARGB_8888,true)
         val mask = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
@@ -49,6 +62,22 @@ class MoustacheRetoucher(private val context: Context) {
         path.lineTo(rr.x, n.y + 5)
         path.lineTo(l.x, n.y + 5)
         path.close()
+        if (region == RetouchRegion.BEARD) path.reset()
+        if (region != RetouchRegion.MOUSTACHE) {
+            val beard = Path()
+            jaw.forEachIndexed { index, i ->
+                val q = local(i)
+                if (index == 0) beard.moveTo(q.x,q.y) else beard.lineTo(q.x,q.y)
+            }
+            // Upper boundary follows below the mouth, excluding nose and upper cheeks.
+            val lowerLip = local(17)
+            val mouthR = local(291); val mouthL = local(61)
+            beard.lineTo(mouthR.x + 14f, mouthR.y + 8f)
+            beard.lineTo(lowerLip.x, lowerLip.y + 7f)
+            beard.lineTo(mouthL.x - 14f, mouthL.y + 8f)
+            beard.close()
+            path.addPath(beard)
+        }
         Canvas(mask).apply { drawColor(Color.WHITE); drawPath(path, Paint().apply { color = Color.BLACK }) }
         val count = 512 * 512
         val pixels = IntArray(count); input.getPixels(pixels, 0, 512, 0, 0, 512, 512)

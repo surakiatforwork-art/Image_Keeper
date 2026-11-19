@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.branchphotovault.LocalAppContainer
 import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.retouch.MoustacheRetoucher
+import com.branchphotovault.retouch.RetouchRegion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
@@ -30,6 +31,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     var result by remember { mutableStateOf<Bitmap?>(null) }
     var faceCount by remember { mutableStateOf(0) }
     var face by remember { mutableStateOf(0) }
+    var region by remember { mutableStateOf(RetouchRegion.BOTH) }
     var busy by remember { mutableStateOf(true) }
     var before by remember { mutableStateOf(false) }
     var strength by remember { mutableFloatStateOf(1f) }
@@ -77,7 +79,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     AlertDialog(
         properties = DialogProperties(dismissOnBackPress = !busy, dismissOnClickOutside = !busy),
         onDismissRequest = { if (!busy) dismiss() },
-        title = { Text("ลดหนวดเหนือริมฝีปาก") },
+        title = { Text("รีทัชหนวดและเครา") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 original?.let { source ->
@@ -89,6 +91,13 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     }
                 }
                 Text(message)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    RetouchRegion.entries.forEach { option ->
+                        FilterChip(selected = region == option, enabled = !busy,
+                            onClick = { region = option; result = null; before = false },
+                            label = { Text(option.label) })
+                    }
+                }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (faceCount > 1) Row {
                     TextButton(enabled = !busy,onClick = { face = (face+1)%faceCount; result = null }) { Text("ใบหน้า ${face+1}/$faceCount (ลำดับตรวจพบ)") }
@@ -103,10 +112,13 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     busy = true; message = "กำลังรีทัช…"
                     scope.launch {
                         try {
-                            result = withContext(Dispatchers.Default) { MoustacheRetoucher(context).process(source,face) }
+                            result = withContext(Dispatchers.Default) { MoustacheRetoucher(context).process(source,face,region) }
                             message = "ตรวจขอบปากและสีผิวก่อนบันทึกฉบับแต่ง"
                         } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) { message = "รีทัชไม่สำเร็จ ลองภาพหน้าตรงที่ใบหน้าชัดเจน" }
+                        catch (error: Exception) {
+                            android.util.Log.e("KeeperRetouch", "Retouch failed", error)
+                            message = "รีทัชไม่สำเร็จ: ${error.message.orEmpty()}"
+                        }
                         finally { busy = false }
                     }
                 }) { Text("รีทัชอัตโนมัติ") }

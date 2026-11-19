@@ -207,7 +207,7 @@ fun PhotoViewerScreen(
                             onClick = { retouchPhoto = photo },
                             enabled = !uiState.isDeleting && !uiState.isSavingToGallery,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("แต่งภาพ · ลดหนวด") }
+                        ) { Text("แต่งภาพ · หนวดและเครา") }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
