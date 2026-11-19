@@ -32,22 +32,27 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PhotoLibrary
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.branchphotovault.ui.components.GlassDialog as AlertDialog
+import com.branchphotovault.ui.components.GlassButton as Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import com.branchphotovault.ui.components.GlassSecondaryButton as FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.branchphotovault.ui.components.GlassTextField as OutlinedTextField
+import com.branchphotovault.ui.components.GlassScaffold as Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.branchphotovault.ui.components.GlassToolbar as TopAppBar
+import com.branchphotovault.ui.components.GlassCard
+import com.branchphotovault.ui.components.glassBrush
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -266,7 +271,7 @@ fun BranchPreviewScreen(
         },
         bottomBar = {
             if (uiState.selectedPhotoIds.isEmpty()) {
-                Surface(shadowElevation = 8.dp) {
+                Surface(color = Color.Transparent,modifier=Modifier.padding(horizontal=12.dp,vertical=6.dp).clip(RoundedCornerShape(28.dp)).background(glassBrush())) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -290,7 +295,7 @@ fun BranchPreviewScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Rounded.CameraAlt, contentDescription = null)
-                            Text("Capture")
+                            Text("ถ่ายภาพ")
                         }
                         FilledTonalButton(
                             onClick = { importLauncher.launch("image/*") },
@@ -298,7 +303,7 @@ fun BranchPreviewScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Rounded.PhotoLibrary, contentDescription = null)
-                            Text("Import")
+                            Text("นำเข้า")
                         }
                     }
                 }
@@ -307,23 +312,23 @@ fun BranchPreviewScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 120.dp),
+            columns = GridCells.Fixed(2),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     uiState.branch?.let { branch ->
-                        androidx.compose.material3.Card(
+                        GlassCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -336,8 +341,8 @@ fun BranchPreviewScreen(
                                     ) {
                                         Text(
                                             text = branch.shopName,
-                                            style = MaterialTheme.typography.titleLarge,
-                                            maxLines = 1,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
@@ -350,15 +355,16 @@ fun BranchPreviewScreen(
                                     RouteBadge(route = branch.currentRoute)
                                 }
                                 Text(
-                                    text = "${uiState.photos.size} photo(s)",
+                                    text = "${uiState.photos.size} รูป",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 FilledTonalButton(
                                     onClick = viewModel::saveAllToGallery,
-                                    enabled = uiState.photos.isNotEmpty()
+                                    enabled = uiState.photos.isNotEmpty(),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Icon(Icons.Rounded.Download, contentDescription = null)
-                                    Text("Save All to Gallery")
+                                    Text("บันทึกทั้งหมดไปยังแกลเลอรี่")
                                 }
                             }
                         }
@@ -428,7 +434,8 @@ private fun PhotoGridItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(128.dp)
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
             .background(
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)

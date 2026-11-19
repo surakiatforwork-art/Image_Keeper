@@ -6,7 +6,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
+import com.branchphotovault.ui.components.GlassCard as Card
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,14 +36,18 @@ fun BranchListItemCard(
             .clickable(onClick = onClick)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Box(Modifier.padding(end=12.dp).size(40.dp).background(MaterialTheme.colorScheme.primary.copy(alpha=.09f),RoundedCornerShape(14.dp)),
+                    contentAlignment=Alignment.Center) {
+                    Icon(Icons.Outlined.Storefront,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(23.dp))
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -50,17 +61,14 @@ fun BranchListItemCard(
                     )
                     Text(
                         text = "${branch.account} • ${branch.branchCode}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Text("${branch.photoCount} รูป",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 RouteBadge(route = branch.currentRoute)
             }
-            Text(
-                text = "${branch.photoCount} photo(s)",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }

@@ -21,17 +21,26 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
+import com.branchphotovault.ui.components.GlassFloatingActionButton as FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.branchphotovault.ui.components.GlassTextField as OutlinedTextField
+import com.branchphotovault.ui.components.GlassScaffold as Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.branchphotovault.ui.components.GlassToolbar as TopAppBar
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.painterResource
+import com.branchphotovault.R
+import com.branchphotovault.ui.components.GlassSearchBar
+import com.branchphotovault.ui.components.GlassDropdown
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,7 +77,11 @@ fun BranchListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Branches") },
+                title = { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    Image(painterResource(R.drawable.keeper_brand),null,Modifier.size(36.dp).graphicsLayer { scaleX=1.4f; scaleY=1.4f })
+                    Text("Image Keeper",style=androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                        maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                } },
                 actions = {
                     IconButton(
                         onClick = viewModel::syncBranches,
@@ -123,38 +136,28 @@ private fun BranchListContent(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("สาขา",style=MaterialTheme.typography.headlineSmall)
+                GlassSearchBar(
                     value = uiState.searchText,
                     onValueChange = onSearchChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search account, branch code, shop name") },
-                    singleLine = true
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    ExposedDropdownMenuBox(
-                        expanded = accountExpanded,
-                        onExpandedChange = { accountExpanded = !accountExpanded },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
+                    Box(Modifier.weight(1f)) {
+                        GlassDropdown(
                             value = uiState.selectedAccount ?: "All Accounts",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Account") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountExpanded) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                .fillMaxWidth()
+                            label = "Account",
+                            onClick = { accountExpanded = !accountExpanded }
                         )
-                        ExposedDropdownMenu(
+                        DropdownMenu(
                             expanded = accountExpanded,
                             onDismissRequest = { accountExpanded = false }
                         ) {
@@ -176,22 +179,13 @@ private fun BranchListContent(
                             }
                         }
                     }
-                    ExposedDropdownMenuBox(
-                        expanded = sortExpanded,
-                        onExpandedChange = { sortExpanded = !sortExpanded },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
+                    Box(Modifier.weight(1f)) {
+                        GlassDropdown(
                             value = uiState.sortOption.label,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Sort By") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortExpanded) },
-                                modifier = Modifier
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                    .fillMaxWidth()
+                            label = "จัดเรียง",
+                            onClick = { sortExpanded = !sortExpanded }
                         )
-                        ExposedDropdownMenu(
+                        DropdownMenu(
                             expanded = sortExpanded,
                             onDismissRequest = { sortExpanded = false }
                         ) {
@@ -216,7 +210,8 @@ private fun BranchListContent(
 
                 Text(
                     text = "Last sync: $lastSyncText",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

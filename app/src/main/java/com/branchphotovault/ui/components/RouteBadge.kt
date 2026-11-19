@@ -15,12 +15,12 @@ fun RouteBadge(route: Int?) {
     val label = route?.let { "Route $it" } ?: "No Route"
     Text(
         text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onPrimary,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha=.13f))
+            .padding(horizontal = 10.dp, vertical = 5.dp)
     )
 }
 

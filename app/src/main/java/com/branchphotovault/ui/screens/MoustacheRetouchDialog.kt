@@ -2,12 +2,26 @@ package com.branchphotovault.ui.screens
 
 import android.graphics.*
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.Alignment
+import com.branchphotovault.ui.components.ZoomableImageViewport
+import com.branchphotovault.ui.components.GlassButton
+import com.branchphotovault.ui.components.GlassSecondaryButton
+import com.branchphotovault.ui.components.glassBrush
 import androidx.compose.ui.unit.dp
 import com.branchphotovault.LocalAppContainer
 import com.branchphotovault.data.local.PhotoEntity
@@ -21,6 +35,7 @@ import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.DialogProperties
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     val context = LocalContext.current
@@ -34,6 +49,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     var region by remember { mutableStateOf(RetouchRegion.BOTH) }
     var busy by remember { mutableStateOf(true) }
     var before by remember { mutableStateOf(false) }
+    var zoomed by remember { mutableStateOf(false) }
     var strength by remember { mutableFloatStateOf(.85f) }
     var message by remember { mutableStateOf("กำลังตรวจใบหน้า…") }
     LaunchedEffect(photo.id) {
@@ -76,14 +92,26 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
         finally { busy = false }
     }
     BackHandler(enabled = busy) {}
-    AlertDialog(
-        properties = DialogProperties(dismissOnBackPress = !busy, dismissOnClickOutside = !busy),
+    val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true,
+        confirmValueChange={ (!busy && !zoomed) || it==SheetValue.Expanded })
+    val sheetShape=RoundedCornerShape(topStart=32.dp,topEnd=32.dp)
+    ModalBottomSheet(
+        sheetState=sheetState,
         onDismissRequest = { if (!busy) dismiss() },
-        title = { Text("รีทัชหนวดและเครา") },
-        text = {
+        containerColor=MaterialTheme.colorScheme.surface.copy(alpha=.98f),
+        shape=sheetShape
+    ) {
+        Column(Modifier.fillMaxWidth().heightIn(max=(LocalConfiguration.current.screenHeightDp*.86f).dp)
+            .navigationBarsPadding().padding(horizontal=20.dp).padding(bottom=16.dp)
+            .verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Outlined.AutoAwesome,null,tint=MaterialTheme.colorScheme.primary)
+                Text("รีทัชหนวดและเครา",style=MaterialTheme.typography.titleLarge)
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 original?.let { source ->
-                    Box(Modifier.fillMaxWidth().height(260.dp)) {
+                    ZoomableImageViewport(photo.id,Modifier.fillMaxWidth().height(260.dp).testTag("retouch-preview"),
+                        imageSize=IntSize(source.width,source.height),onZoomChanged={ zoomed=it }) {
                         Image((if (result == null) faceGuide ?: source else source).asImageBitmap(),null,Modifier.fillMaxSize())
                         if (!before) result?.let { edited ->
                             Image(edited.asImageBitmap(),null,Modifier.fillMaxSize(),alpha = strength)
@@ -91,7 +119,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     }
                 }
                 Text(message)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     RetouchRegion.entries.forEach { option ->
                         FilterChip(selected = region == option, enabled = !busy,
                             onClick = { region = option; result = null; before = false },
@@ -107,8 +135,8 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     Text("ความแรง ${(strength*100).toInt()}%")
                     Slider(strength,{ strength = it },enabled = !busy)
                 }
-                OutlinedButton(enabled = !busy && faceCount > 0,onClick = {
-                    val source = original ?: return@OutlinedButton
+                GlassButton(modifier=Modifier.fillMaxWidth(),enabled = !busy && faceCount > 0,onClick = {
+                    val source = original ?: return@GlassButton
                     busy = true; result = null; before = false; message = "กำลังวิเคราะห์ภาพ…"
                     scope.launch {
                         try {
@@ -127,10 +155,11 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     }
                 }) { Text("แต่งอัตโนมัติด้วย AI") }
             }
-        },
-        confirmButton = { TextButton(enabled = !busy && result != null,onClick = {
-            val source = original ?: return@TextButton
-            val edited = result ?: return@TextButton
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                GlassSecondaryButton(enabled=!busy,onClick=dismiss,modifier=Modifier.weight(1f)) { Text("ยกเลิก") }
+                GlassButton(modifier=Modifier.weight(1.5f),enabled = !busy && result != null,onClick = {
+            val source = original ?: return@GlassButton
+            val edited = result ?: return@GlassButton
             busy = true
             scope.launch {
                 try {
@@ -146,7 +175,8 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                 catch (_: Exception) { message = "บันทึกไม่สำเร็จ ต้นฉบับยังอยู่ครบ" }
                 finally { busy = false }
             }
-        }) { Text("บันทึกฉบับแต่ง") } },
-        dismissButton = { TextButton(enabled = !busy,onClick = dismiss) { Text("ยกเลิก") } }
-    )
+        }) { Text("บันทึกฉบับแต่ง") }
+            }
+        }
+    }
 }
