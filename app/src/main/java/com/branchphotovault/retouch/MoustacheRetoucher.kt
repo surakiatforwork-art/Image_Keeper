@@ -7,114 +7,202 @@ import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
-import java.nio.ByteBuffer
+import java.io.File
+import java.nio.FloatBuffer
+import kotlin.math.*
 
-/** Processes a bounded face crop; original file is never changed. */
 enum class RetouchRegion(val label: String) {
     MOUSTACHE("หนวด"), BEARD("เครา"), BOTH("หนวดและเครา")
 }
 
+/** Offline AttGAN compositing. The caller's bitmap and original file are never modified. */
 class MoustacheRetoucher(private val context: Context) {
     fun faces(bitmap: Bitmap): List<List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>> {
         val options = FaceLandmarker.FaceLandmarkerOptions.builder()
             .setBaseOptions(BaseOptions.builder().setModelAssetPath("retouch/face_landmarker.task").build())
             .setRunningMode(RunningMode.IMAGE).setNumFaces(5).setMinFaceDetectionConfidence(0.6f).build()
         return FaceLandmarker.createFromOptions(context, options).use { detector ->
-            // MPImage.close() owns/releases its bitmap; never pass the Compose preview.
-            val detectionBitmap = bitmap.copy(Bitmap.Config.ARGB_8888,false)
-            val image = BitmapImageBuilder(detectionBitmap).build()
+            val image = BitmapImageBuilder(bitmap.copy(Bitmap.Config.ARGB_8888, false)).build()
             try { detector.detect(image).faceLandmarks() } finally { image.close() }
         }
     }
 
-    fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH): Bitmap {
+    fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH): Bitmap = synchronized(lock) {
         val face = faces(bitmap).getOrNull(faceIndex) ?: error("ไม่พบใบหน้า กรุณาเลือกภาพที่เห็นใบหน้าชัดเจน")
-        fun point(i: Int) = PointF(face[i].x() * bitmap.width, face[i].y() * bitmap.height)
-        val left = point(61); val right = point(291); val nose = point(2); val lip = point(0)
-        val span = kotlin.math.hypot(right.x - left.x, right.y - left.y)
-        require(span >= 25 && lip.y > nose.y) { "ใบหน้าเล็กหรือเอียงเกินไป กรุณาใช้ภาพหน้าตรง" }
-        val jaw = listOf(234,93,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,323,454)
-        val bounds = if (region == RetouchRegion.MOUSTACHE) Rect(
-            (minOf(left.x, right.x) - span * 0.7f).toInt().coerceAtLeast(0),
-            (nose.y - span * 0.6f).toInt().coerceAtLeast(0),
-            (maxOf(left.x, right.x) + span * 0.7f).toInt().coerceAtMost(bitmap.width),
-            (lip.y + span * 0.6f).toInt().coerceAtMost(bitmap.height))
-        else Rect(
-            (jaw.minOf { point(it).x } - span * 0.2f).toInt().coerceAtLeast(0),
-            (nose.y - span * 0.5f).toInt().coerceAtLeast(0),
-            (jaw.maxOf { point(it).x } + span * 0.2f).toInt().coerceAtMost(bitmap.width),
-            (point(152).y + span * 0.25f).toInt().coerceAtMost(bitmap.height))
-        require(bounds.width() > 0 && bounds.height() > 0) { "ใบหน้าอยู่นอกขอบภาพ" }
-        val crop = Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height())
-        val input = Bitmap.createScaledBitmap(crop, 512, 512, true).copy(Bitmap.Config.ARGB_8888,true)
-        val mask = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+        val width = bitmap.width
+        val height = bitmap.height
+        fun p(i: Int) = PointF(face[i].x() * width, face[i].y() * height)
+        val left = p(61); val right = p(291)
+        val span = hypot(right.x - left.x, right.y - left.y)
+        require(span >= 25) { "ใบหน้าเล็กเกินไป กรุณาเลือกภาพที่เห็นใบหน้าชัดเจน" }
+        val eyeL = PointF((p(33).x + p(133).x) / 2, (p(33).y + p(133).y) / 2)
+        val eyeR = PointF((p(362).x + p(263).x) / 2, (p(362).y + p(263).y) / 2)
+        val dx = eyeR.x - eyeL.x; val dy = eyeR.y - eyeL.y
+        val normSquared = dx * dx + dy * dy
+        require(normSquared > 1) { "ตำแหน่งใบหน้าไม่ชัดเจน" }
+        val a = dx * 64f / normSquared; val b = dy * 64f / normSquared
+        val centerX = (eyeL.x + eyeR.x) / 2; val centerY = (eyeL.y + eyeR.y) / 2
+        val tx = 128f - a * centerX - b * centerY
+        val ty = 115.2f + b * centerX - a * centerY
+        val det = a * a + b * b
+        val original = IntArray(width * height)
+        bitmap.getPixels(original, 0, width, 0, 0, width, height)
+        val input = FloatArray(PLANE * 3)
+        for (y in 0 until SIZE) for (x in 0 until SIZE) {
+            val sx = (a * (x - tx) - b * (y - ty)) / det
+            val sy = (b * (x - tx) + a * (y - ty)) / det
+            for (c in 0..2) input[c * PLANE + y * SIZE + x] =
+                sampleOriginal(original, width, height, sx, sy, c).roundToInt().coerceIn(0,255) / 127.5f - 1f
+        }
+        val generated = runModel(input)
+        fun generatedAt(x: Int, y: Int, c: Int) = samplePlane(generated, a*x+b*y+tx, -b*x+a*y+ty, c)
         val path = Path()
-        fun local(i: Int): PointF = point(i).let { PointF((it.x - bounds.left) * 512 / bounds.width(), (it.y - bounds.top) * 512 / bounds.height()) }
-        // Follow the upper-lip contour, then close below the nose; exclude the lips.
-        val contour = listOf(61, 40, 37, 0, 267, 270, 291)
-        contour.forEachIndexed { index, i ->
-            val q = local(i)
-            q.y -= 3f
-            if (index == 0) path.moveTo(q.x, q.y) else path.lineTo(q.x, q.y)
+        fun polygon(points: List<PointF>, target: Path = path) {
+            points.forEachIndexed { i, q -> if (i == 0) target.moveTo(q.x,q.y) else target.lineTo(q.x,q.y) }
+            target.close()
         }
-        val n = local(2)
-        val l = local(61); val rr = local(291)
-        path.lineTo(rr.x, n.y + 5)
-        path.lineTo(l.x, n.y + 5)
-        path.close()
-        if (region == RetouchRegion.BEARD) path.reset()
+        if (region != RetouchRegion.BEARD) {
+            val mouth = listOf(61,40,37,0,267,270,291).map { p(it).apply { y -= max(2f,span*.035f) } }
+            val top = p(2).y + span*.04f
+            polygon(mouth + listOf(PointF(mouth.last().x,top),PointF(mouth.first().x,top)))
+        }
         if (region != RetouchRegion.MOUSTACHE) {
-            val beard = Path()
-            jaw.forEachIndexed { index, i ->
-                val q = local(i)
-                if (index == 0) beard.moveTo(q.x,q.y) else beard.lineTo(q.x,q.y)
-            }
-            // Upper boundary follows below the mouth, excluding nose and upper cheeks.
-            val lowerLip = local(17)
-            val mouthR = local(291); val mouthL = local(61)
-            beard.lineTo(mouthR.x + 14f, mouthR.y + 8f)
-            beard.lineTo(lowerLip.x, lowerLip.y + 7f)
-            beard.lineTo(mouthL.x - 14f, mouthL.y + 8f)
-            beard.close()
-            path.addPath(beard)
+            val jaw = listOf(58,172,136,150,149,176,148,152,377,400,378,379,365,397,288).map(::p)
+            polygon(jaw + listOf(PointF(right.x+span*.12f,right.y+span*.02f),
+                p(17).apply { y += span*.04f },PointF(left.x-span*.12f,left.y+span*.02f)))
         }
-        Canvas(mask).apply { drawColor(Color.WHITE); drawPath(path, Paint().apply { color = Color.BLACK }) }
-        val count = 512 * 512
-        val pixels = IntArray(count); input.getPixels(pixels, 0, 512, 0, 0, 512, 512)
-        val maskPixels = IntArray(count); mask.getPixels(maskPixels, 0, 512, 0, 0, 512, 512)
-        val rgb = ByteArray(count * 3)
-        val m = ByteArray(count)
-        for (i in pixels.indices) {
-            rgb[i] = Color.red(pixels[i]).toByte(); rgb[count + i] = Color.green(pixels[i]).toByte()
-            rgb[count * 2 + i] = Color.blue(pixels[i]).toByte(); m[i] = Color.red(maskPixels[i]).toByte()
+        val protected = Path()
+        polygon(listOf(61,40,37,0,267,270,291,321,314,17,84,91).map(::p),protected)
+        polygon(listOf(98,2,327,4).map(::p),protected)
+        val mask = Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
+        val maskPixels = IntArray(original.size)
+        try {
+            val canvas = Canvas(mask)
+            val paint = Paint().apply { color = Color.WHITE; strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND }
+            canvas.drawPath(path,paint)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = max(2,(span*.16f).toInt()) * 2f
+            canvas.drawPath(path,paint)
+            paint.style = Paint.Style.FILL
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+            canvas.drawPath(protected,paint)
+            mask.getPixels(maskPixels,0,width,0,0,width,height)
+        } finally { mask.recycle() }
+        // Feather inward only: pixels outside the mask stay byte-identical to the input.
+        val distance = FloatArray(original.size) { if (Color.alpha(maskPixels[it]) == 0) 0f else 1e6f }
+        for (y in 0 until height) for (x in 0 until width) {
+            val i = y*width+x
+            if (x == 0 || y == 0 || x == width-1 || y == height-1) distance[i] = 0f
+            if (x > 0) distance[i] = min(distance[i],distance[i-1]+1)
+            if (y > 0) distance[i] = min(distance[i],distance[i-width]+1)
+            if (x > 0 && y > 0) distance[i] = min(distance[i],distance[i-width-1]+1.414214f)
+            if (x+1 < width && y > 0) distance[i] = min(distance[i],distance[i-width+1]+1.414214f)
+        }
+        for (y in height-1 downTo 0) for (x in width-1 downTo 0) {
+            val i = y*width+x
+            if (x+1 < width) distance[i] = min(distance[i],distance[i+1]+1)
+            if (y+1 < height) distance[i] = min(distance[i],distance[i+width]+1)
+            if (x+1 < width && y+1 < height) distance[i] = min(distance[i],distance[i+width+1]+1.414214f)
+            if (x > 0 && y+1 < height) distance[i] = min(distance[i],distance[i+width-1]+1.414214f)
+        }
+        val offsets = Array(3) { mutableListOf<Float>() }
+        val radius = max(3,(span*.12f).toInt())
+        val samples = HashSet<Int>()
+        for (center in listOf(50,280,205,425).map(::p)) {
+            val cx = center.x.toInt(); val cy = center.y.toInt()
+            for (y in max(0,cy-radius)..min(height-1,cy+radius)) for (x in max(0,cx-radius)..min(width-1,cx+radius)) {
+                if ((x-cx)*(x-cx)+(y-cy)*(y-cy) <= radius*radius) samples.add(y*width+x)
+            }
+        }
+        require(samples.isNotEmpty()) { "ใบหน้าอยู่นอกขอบภาพ" }
+        for (i in samples) {
+            val x = i%width; val y = i/width; val source = original[i]
+            val first = rgbToLab(Color.red(source).toFloat(),Color.green(source).toFloat(),Color.blue(source).toFloat())
+            val second = rgbToLab(generatedAt(x,y,0).toInt().toFloat(),generatedAt(x,y,1).toInt().toFloat(),generatedAt(x,y,2).toInt().toFloat())
+            for (c in 0..2) offsets[c].add(first[c]-second[c])
+        }
+        val offset = FloatArray(3) { c -> offsets[c].sorted().let { (it[(it.size-1)/2]+it[it.size/2])/2 } }
+        val output = original.copyOf()
+        for (i in output.indices) {
+            if (distance[i] <= 0f) continue
+            val x = i%width; val y = i/width
+            val lab = rgbToLab(generatedAt(x,y,0).toInt().toFloat(),generatedAt(x,y,1).toInt().toFloat(),generatedAt(x,y,2).toInt().toFloat())
+            val matched = labToRgb(lab[0]+offset[0],lab[1]+offset[1],lab[2]+offset[2])
+            val source = original[i]
+            val alpha = (distance[i]/max(2f,span*.055f)).coerceIn(0f,1f)
+            val channels = IntArray(3) { c ->
+                val value = channel(source,c).toFloat()
+                var average = 0f
+                for (yy in -1..1) for (xx in -1..1) average += channel(original[
+                    (y+yy).coerceIn(0,height-1)*width+(x+xx).coerceIn(0,width-1)],c)
+                val fine = (value-average/9f).coerceIn(-2.5f,2.5f)*.6f
+                (value*(1-alpha)+(matched[c]+fine).coerceIn(0f,255f)*alpha).toInt().coerceIn(0,255)
+            }
+            output[i] = Color.rgb(channels[0],channels[1],channels[2])
+        }
+        Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888).apply { setPixels(output,0,width,0,0,width,height) }
+    }
+
+    private fun runModel(input: FloatArray): FloatArray {
+        val file = File(context.cacheDir,"attgan-d0011f493b12.onnx")
+        if (file.length() != 86936315L) {
+            val temporary = File(context.cacheDir,"attgan-copy.tmp")
+            try {
+                context.assets.open("retouch/attgan.onnx").use { source -> temporary.outputStream().use { source.copyTo(it) } }
+                check(temporary.length() == 86936315L && temporary.renameTo(file)) { "เตรียมโมเดลไม่สำเร็จ" }
+            } finally { temporary.delete() }
         }
         val env = OrtEnvironment.getEnvironment()
-        val model = context.assets.open("retouch/migan.onnx").use { it.readBytes() }
-        val generated = IntArray(count)
-        OrtSession.SessionOptions().use { options ->
+        return OrtSession.SessionOptions().use { options ->
             options.setIntraOpNumThreads(2)
-            env.createSession(model, options).use { session ->
-                OnnxTensor.createTensor(env, ByteBuffer.wrap(rgb), longArrayOf(1,3,512,512), OnnxJavaType.UINT8).use { imageTensor ->
-                    OnnxTensor.createTensor(env, ByteBuffer.wrap(m), longArrayOf(1,1,512,512), OnnxJavaType.UINT8).use { maskTensor ->
-                        session.run(mapOf("image" to imageTensor, "mask" to maskTensor)).use { result ->
-                            val bytes = (result[0] as OnnxTensor).byteBuffer
-                            for (i in 0 until count) generated[i] = Color.rgb(bytes.get(i).toInt() and 255,
-                                bytes.get(count+i).toInt() and 255, bytes.get(count*2+i).toInt() and 255)
-                        }
+            options.setInterOpNumThreads(1)
+            env.createSession(file.absolutePath,options).use { session ->
+                OnnxTensor.createTensor(env,FloatBuffer.wrap(input),longArrayOf(1,3,256,256)).use { tensor ->
+                    session.run(mapOf("image" to tensor)).use { result ->
+                        val buffer = (result[0] as OnnxTensor).floatBuffer
+                        FloatArray(PLANE*3).also { buffer.get(it); check(it.all { v -> v.isFinite() }) }
                     }
                 }
             }
         }
-        val processed = Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888)
-        processed.setPixels(generated,0,512,0,0,512,512)
-        // Restrict compositing to the mask, even if the model changes other pixels.
-        val alpha = Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888)
-        Canvas(alpha).drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; maskFilter = BlurMaskFilter(3f,BlurMaskFilter.Blur.NORMAL) })
-        Canvas(processed).drawBitmap(alpha,0f,0f,Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
-        val output = bitmap.copy(Bitmap.Config.ARGB_8888,true)
-        Canvas(output).drawBitmap(processed,null,bounds,Paint(Paint.FILTER_BITMAP_FLAG))
-        listOf(input,mask,alpha,processed).distinct().forEach { if (it !== bitmap && it !== crop) it.recycle() }
-        if (crop !== bitmap) crop.recycle()
-        return output
+    }
+    private fun channel(pixel: Int,c: Int) = when(c) { 0 -> Color.red(pixel); 1 -> Color.green(pixel); else -> Color.blue(pixel) }
+    private fun reflected(value: Int,size: Int): Int {
+        if (size <= 1) return 0
+        val period = (size-1)*2
+        val normalized = ((value%period)+period)%period
+        return if (normalized >= size) period-normalized else normalized
+    }
+    private fun sampleOriginal(pixels: IntArray,width: Int,height: Int,x: Float,y: Float,c: Int): Float {
+        val x0 = floor(x).toInt(); val y0 = floor(y).toInt(); val fx = x-x0; val fy = y-y0
+        fun v(xx: Int,yy: Int) = channel(pixels[reflected(yy,height)*width+reflected(xx,width)],c).toFloat()
+        return (v(x0,y0)*(1-fx)+v(x0+1,y0)*fx)*(1-fy)+(v(x0,y0+1)*(1-fx)+v(x0+1,y0+1)*fx)*fy
+    }
+    private fun samplePlane(pixels: FloatArray,x: Float,y: Float,c: Int): Float {
+        val x0 = floor(x).toInt(); val y0 = floor(y).toInt(); val fx = x-x0; val fy = y-y0
+        fun v(xx: Int,yy: Int) = pixels[c*PLANE+reflected(yy,SIZE)*SIZE+reflected(xx,SIZE)]
+        return (v(x0,y0)*(1-fx)+v(x0+1,y0)*fx)*(1-fy)+(v(x0,y0+1)*(1-fx)+v(x0+1,y0+1)*fx)*fy
+    }
+    private fun rgbToLab(r: Float,g: Float,b: Float): FloatArray {
+        fun linear(v: Float) = (v/255.0).let { if (it <= .04045) it/12.92 else ((it+.055)/1.055).pow(2.4) }
+        val rr = linear(r); val gg = linear(g); val bb = linear(b)
+        fun f(t: Double) = if (t > .0088564517) Math.cbrt(t) else 7.787037*t+16.0/116
+        val x = f((rr*.4124564+gg*.3575761+bb*.1804375)/.95047)
+        val y = f(rr*.2126729+gg*.7151522+bb*.0721750)
+        val z = f((rr*.0193339+gg*.1191920+bb*.9503041)/1.08883)
+        return floatArrayOf(((116*y-16)*2.55).toFloat(),(500*(x-y)+128).toFloat(),(200*(y-z)+128).toFloat())
+    }
+    private fun labToRgb(l: Float,a: Float,b: Float): FloatArray {
+        val fy = (l.coerceIn(0f,255f)/2.55+16)/116
+        val fx = fy+(a.coerceIn(0f,255f)-128)/500.0; val fz = fy-(b.coerceIn(0f,255f)-128)/200.0
+        fun inv(t: Double) = if (t > 6.0/29) t*t*t else (t-16.0/116)/7.787037
+        val x = inv(fx)*.95047; val y = inv(fy); val z = inv(fz)*1.08883
+        fun gamma(t: Double) = (255*(if (t <= .0031308) 12.92*t else 1.055*t.pow(1/2.4)-.055)).toFloat().coerceIn(0f,255f)
+        return floatArrayOf(gamma(x*3.2404542-y*1.5371385-z*.4985314),gamma(-x*.9692660+y*1.8760108+z*.0415560),gamma(x*.0556434-y*.2040259+z*1.0572252))
+    }
+    companion object {
+        private const val SIZE = 256
+        private const val PLANE = SIZE*SIZE
+        private val lock = Any()
     }
 }

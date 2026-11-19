@@ -1,10 +1,16 @@
-Keeper moustache retouch
+Keeper offline moustache and beard retouch (AttGAN)
 
-MI-GAN pipeline:
-https://github.com/Picsart-AI-Research/MI-GAN
-https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx
-SHA256 6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b
-See MI-GAN-LICENSE.txt (MIT, code and weights).
+AttGAN-PyTorch:
+https://github.com/elvisyjlin/AttGAN-PyTorch
+Official checkpoint: 256_shortcut1_inject1_none_hq/checkpoint/weights.199.pth
+https://drive.google.com/drive/folders/1_E5YCb4XOTZpt6KBwBzSaJdofoqPViN8
+Archive file ID: 1-n1Af-LqaOyw8vYFP0fXJlntFXWkDYS9
+See AttGAN-LICENSE.txt (MIT implementation).
+Pretrained on CelebA-HQ; downstream users must consider the original dataset/model terms.
+Derived fixed Mustache=-1, No_Beard=1 generator: attgan.onnx
+SHA256 d0011f493b1205311210246f75aa5a7853d3b37e1b25af34db4573b95987ce07
+Large weights stored as float16 with float32 operator execution; ONNX opset 17.
+Conversion: tools/export_attgan_android.py. Mean test output error 0.0066 / 255.
 
 MediaPipe Face Landmarker:
 https://github.com/google-ai-edge/mediapipe
@@ -17,6 +23,7 @@ https://onnxruntime.ai/
 https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.20.0
 MIT; included runtime notices must be retained.
 
-The moustache mask is a Keeper heuristic based on upper-lip landmarks,
-not a trained facial-hair segmentation model. The bundled MI-GAN pipeline
-is a general inpainting model, not a dedicated beard-removal model.
+The edit mask is a Keeper heuristic based on lip and lower-jaw landmarks,
+not a trained facial-hair segmentation model. Nose/lips are protected.
+Face alignment, cheek colour matching and inward feathering run locally.
+The app keeps original photos and saves edits as separate copies.

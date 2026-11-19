@@ -14,3 +14,7 @@ workdb.sqlite
 
 # Local source repositories used only for implementation reference.
 _reference/
+
+# Local Python experiment caches (never part of the Android release).
+__pycache__/
+*.pyc

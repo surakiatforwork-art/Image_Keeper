@@ -7,7 +7,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.branchphotovault.retouch.MoustacheRetoucher
 import ai.onnxruntime.*
-import java.nio.ByteBuffer
+import java.nio.FloatBuffer
+import java.io.File
+import com.branchphotovault.retouch.RetouchRegion
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,36 +30,64 @@ class RetouchRuntimeTest {
         finally { decoded.recycle(); source.recycle() }
     }
 
-    @Test fun inpaintingModelRunsOnDevice() {
+    @Test fun attganModelRunsOnDevice() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val size = 512 * 512
-        val rgb = ByteArray(size * 3) { 170.toByte() }
-        val mask = ByteArray(size) { 255.toByte() }
-        for (y in 230..250) for (x in 190..310) mask[y*512+x] = 0
+        val size = 256 * 256
+        val file = File(context.cacheDir,"attgan-runtime-test.onnx")
+        context.assets.open("retouch/attgan.onnx").use { source -> file.outputStream().use { source.copyTo(it) } }
         val env = OrtEnvironment.getEnvironment()
-        OrtSession.SessionOptions().use { options ->
+        try { OrtSession.SessionOptions().use { options ->
             options.setIntraOpNumThreads(2)
-            env.createSession(context.assets.open("retouch/migan.onnx").use { it.readBytes() },options).use { session ->
-                OnnxTensor.createTensor(env,ByteBuffer.wrap(rgb),longArrayOf(1,3,512,512),OnnxJavaType.UINT8).use { image ->
-                    OnnxTensor.createTensor(env,ByteBuffer.wrap(mask),longArrayOf(1,1,512,512),OnnxJavaType.UINT8).use { m ->
-                        session.run(mapOf("image" to image,"mask" to m)).use { result ->
-                            val bytes = (result[0] as OnnxTensor).byteBuffer
-                            assertEquals(size*3,bytes.remaining())
-                            val pixels = IntArray(size) { i -> Color.rgb(
-                                bytes.get(i).toInt() and 255,
-                                bytes.get(size+i).toInt() and 255,
-                                bytes.get(size*2+i).toInt() and 255) }
-                            val processed = Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888)
-                            try {
-                                processed.setPixels(pixels,0,512,0,0,512,512)
-                                assertTrue(processed.isMutable)
-                                android.graphics.Canvas(processed).drawColor(Color.TRANSPARENT,
-                                    android.graphics.PorterDuff.Mode.DST_IN)
-                            } finally { processed.recycle() }
-                        }
+            env.createSession(file.absolutePath,options).use { session ->
+                OnnxTensor.createTensor(env,FloatBuffer.wrap(FloatArray(size*3)),longArrayOf(1,3,256,256)).use { image ->
+                    session.run(mapOf("image" to image)).use { result ->
+                        val buffer = (result[0] as OnnxTensor).floatBuffer
+                        assertEquals(size*3,buffer.remaining())
+                        val pixels = FloatArray(size*3)
+                        buffer.get(pixels)
+                        assertTrue(pixels.all { it.isFinite() && it in 0f..255f })
                     }
                 }
             }
+        } } finally { file.delete() }
+    }
+
+    @Test fun realPhotosRetouchWithoutChangingOriginal() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val files = File(context.cacheDir,"retouch-fixtures").listFiles { file -> file.extension == "jpg" }.orEmpty().sortedBy { it.name }
+        org.junit.Assume.assumeTrue("Private test fixtures are supplied separately, never bundled",files.isNotEmpty())
+        val retoucher = MoustacheRetoucher(context)
+        for ((index,file) in files.withIndex()) {
+            val source = requireNotNull(BitmapFactory.decodeFile(file.absolutePath))
+            val before = IntArray(source.width*source.height)
+            source.getPixels(before,0,source.width,0,0,source.width,source.height)
+            val regions = if (index == 0) RetouchRegion.entries else listOf(RetouchRegion.BOTH)
+            try { for (region in regions) {
+                val started = android.os.SystemClock.elapsedRealtime()
+                val result = retoucher.process(source,0,region)
+                try {
+                    assertFalse(source.isRecycled)
+                    assertEquals(source.width,result.width)
+                    assertEquals(source.height,result.height)
+                    val after = IntArray(before.size)
+                    source.getPixels(after,0,source.width,0,0,source.width,source.height)
+                    assertArrayEquals("Retouch must not change the preview bitmap",before,after)
+                    result.getPixels(after,0,result.width,0,0,result.width,result.height)
+                    assertTrue("Retouch must change some pixels",before.indices.any { before[it] != after[it] })
+                    assertEquals("Background must be unchanged",before[0],after[0])
+                    assertEquals(before.last(),after.last())
+                    val face = retoucher.faces(source).first()
+                    for (point in listOf(4,13,14)) {
+                        val x = (face[point].x()*source.width).toInt().coerceIn(0,source.width-1)
+                        val y = (face[point].y()*source.height).toInt().coerceIn(0,source.height-1)
+                        assertEquals("Nose/lip pixels must be protected",source.getPixel(x,y),result.getPixel(x,y))
+                    }
+                    if (region == RetouchRegion.BOTH) File(context.cacheDir,"${file.nameWithoutExtension}-android.png").outputStream().use {
+                        assertTrue(result.compress(Bitmap.CompressFormat.PNG,100,it))
+                    }
+                    android.util.Log.i("KeeperRetouchTest","${file.name} $region ${android.os.SystemClock.elapsedRealtime()-started}ms")
+                } finally { result.recycle() }
+            } } finally { source.recycle() }
         }
     }
 }

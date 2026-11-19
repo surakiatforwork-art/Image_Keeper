@@ -34,7 +34,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     var region by remember { mutableStateOf(RetouchRegion.BOTH) }
     var busy by remember { mutableStateOf(true) }
     var before by remember { mutableStateOf(false) }
-    var strength by remember { mutableFloatStateOf(1f) }
+    var strength by remember { mutableFloatStateOf(.85f) }
     var message by remember { mutableStateOf("กำลังตรวจใบหน้า…") }
     LaunchedEffect(photo.id) {
         try {
