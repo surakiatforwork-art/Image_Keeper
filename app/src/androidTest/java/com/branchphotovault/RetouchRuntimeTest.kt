@@ -10,12 +10,23 @@ import ai.onnxruntime.*
 import java.nio.FloatBuffer
 import java.io.File
 import com.branchphotovault.retouch.RetouchRegion
+import com.branchphotovault.retouch.FaceParsingTool
+import com.branchphotovault.retouch.FaceParsingResult
+import com.branchphotovault.retouch.RetouchStage
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RetouchRuntimeTest {
+    @Test fun faceParsingToolRunsAndProtectsAnatomicalClasses() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val parsing = FaceParsingTool(context).analyse(FloatArray(3*256*256))
+        assertTrue(parsing.labelAt(128f,128f) in 0..18)
+        assertEquals(0,parsing.labelAt(-1f,128f))
+        for (label in listOf(0,2,3,4,5,6,7,8,9,10,11,12,13,15,16,18)) assertFalse(FaceParsingResult.allowsRetouch(label))
+        for (label in listOf(1,14,17)) assertTrue(FaceParsingResult.allowsRetouch(label))
+    }
     @Test fun decodeAndFaceModelLoadOnDevice() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val source = Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888)
@@ -57,6 +68,8 @@ class RetouchRuntimeTest {
         val files = File(context.cacheDir,"retouch-fixtures").listFiles { file -> file.extension == "jpg" }.orEmpty().sortedBy { it.name }
         org.junit.Assume.assumeTrue("Private test fixtures are supplied separately, never bundled",files.isNotEmpty())
         val retoucher = MoustacheRetoucher(context)
+        val scenario = androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java)
+        try {
         for ((index,file) in files.withIndex()) {
             val source = requireNotNull(BitmapFactory.decodeFile(file.absolutePath))
             val before = IntArray(source.width*source.height)
@@ -64,8 +77,10 @@ class RetouchRuntimeTest {
             val regions = if (index == 0) RetouchRegion.entries else listOf(RetouchRegion.BOTH)
             try { for (region in regions) {
                 val started = android.os.SystemClock.elapsedRealtime()
-                val result = retoucher.process(source,0,region)
+                val stages = mutableListOf<RetouchStage>()
+                val result = retoucher.process(source,0,region) { stages.add(it) }
                 try {
+                    assertEquals(RetouchStage.entries,stages)
                     assertFalse(source.isRecycled)
                     assertEquals(source.width,result.width)
                     assertEquals(source.height,result.height)
@@ -89,5 +104,6 @@ class RetouchRuntimeTest {
                 } finally { result.recycle() }
             } } finally { source.recycle() }
         }
+        } finally { scenario.close() }
     }
 }

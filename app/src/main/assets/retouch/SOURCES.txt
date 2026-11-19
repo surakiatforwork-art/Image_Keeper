@@ -12,6 +12,17 @@ SHA256 d0011f493b1205311210246f75aa5a7853d3b37e1b25af34db4573b95987ce07
 Large weights stored as float16 with float32 operator execution; ONNX opset 17.
 Conversion: tools/export_attgan_android.py. Mean test output error 0.0066 / 255.
 
+BiSeNet face parsing (ResNet18, 19 anatomical classes):
+https://github.com/yakhyo/face-parsing
+https://github.com/yakhyo/face-parsing/releases/download/weights/resnet18.onnx
+See FaceParsing-LICENSE.txt (MIT implementation).
+Pretrained on CelebAMask-HQ; original model/dataset terms also apply.
+Derived label-only face_parser.onnx SHA256:
+f68ce0be643944034c79c38c110296cdc8aee10e1509df6ab161340ad66ac353
+Float16 weight storage, float32 operators; class output is uint8, 512x512.
+Conversion: tools/prepare_face_parser.py. Label agreement on one aligned sample:
+99.9989% relative to the original float32 model.
+
 MediaPipe Face Landmarker:
 https://github.com/google-ai-edge/mediapipe
 https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
@@ -23,7 +34,13 @@ https://onnxruntime.ai/
 https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.20.0
 MIT; included runtime notices must be retained.
 
-The edit mask is a Keeper heuristic based on lip and lower-jaw landmarks,
-not a trained facial-hair segmentation model. Nose/lips are protected.
-Face alignment, cheek colour matching and inward feathering run locally.
+The edit mask combines lip/lower-jaw heuristics with learned anatomical parsing.
+This parser has no separate beard class: skin, neck and hair labels are allowed
+only inside the independent lower-face mask. Other classes are protected.
+Nose/lips are also explicitly protected by landmarks. Low usable-mask/reference
+coverage stops the edit rather than silently falling back to unprotected retouch.
+The automatic controller uses model results and deterministic safety rules;
+it is not an LLM or a general-purpose reasoning agent.
+Face alignment, cheek colour selection, conditional left/right illumination
+matching, bounded Lab correction, texture recovery and inward feathering run locally.
 The app keeps original photos and saves edits as separate copies.

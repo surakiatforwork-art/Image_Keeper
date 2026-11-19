@@ -109,11 +109,15 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                 }
                 OutlinedButton(enabled = !busy && faceCount > 0,onClick = {
                     val source = original ?: return@OutlinedButton
-                    busy = true; message = "กำลังรีทัช…"
+                    busy = true; result = null; before = false; message = "กำลังวิเคราะห์ภาพ…"
                     scope.launch {
                         try {
-                            result = withContext(Dispatchers.Default) { MoustacheRetoucher(context).process(source,face,region) }
-                            message = "ตรวจขอบปากและสีผิวก่อนบันทึกฉบับแต่ง"
+                            result = withContext(Dispatchers.Default) {
+                                MoustacheRetoucher(context).process(source,face,region) { stage ->
+                                    scope.launch { message = stage.message }
+                                }
+                            }
+                            message = "วิเคราะห์พื้นที่และปรับผิวแล้ว · ตรวจผลก่อนบันทึก ต้นฉบับยังอยู่ครบ"
                         } catch (cancelled: CancellationException) { throw cancelled }
                         catch (error: Exception) {
                             android.util.Log.e("KeeperRetouch", "Retouch failed", error)
@@ -121,7 +125,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                         }
                         finally { busy = false }
                     }
-                }) { Text("รีทัชอัตโนมัติ") }
+                }) { Text("แต่งอัตโนมัติด้วย AI") }
             }
         },
         confirmButton = { TextButton(enabled = !busy && result != null,onClick = {

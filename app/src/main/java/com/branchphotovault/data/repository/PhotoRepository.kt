@@ -47,7 +47,7 @@ class PhotoRepository(
             try { thumb.outputStream().use { check(small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it)) } }
             finally { if (small !== bitmap) small.recycle() }
             val copy = source.copy(id = id, localMainPath = main.absolutePath, localThumbPath = thumb.absolutePath,
-                note = listOfNotNull(source.note, "Retouched moustache; source=${source.id}; AttGAN-v1").joinToString("\n"))
+                note = listOfNotNull(source.note, "Retouched moustache; source=${source.id}; AttGAN+BiSeNet-v2").joinToString("\n"))
             check(photoDao.insertForTransfer(copy) != -1L)
             copy
         } catch (error: Exception) {

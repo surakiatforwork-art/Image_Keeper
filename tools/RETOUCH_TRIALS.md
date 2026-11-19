@@ -19,6 +19,9 @@ outside the repository. Do not attach them to an application release.
 - `retouch_adaptive_trial.py`: reblend existing private AttGAN outputs using
   luminance/line evidence, with an optional lower-jaw prior. No network or model
   download is used. This is a heuristic, not learned hair segmentation.
+- `prepare_face_parser.py`: convert the original BiSeNet ResNet18 ONNX into
+  half-storage, float32-execution, label-only format; check class agreement.
+- `compare_device_retouch.py`: private original/prototype/device preview sheets.
 
 All completed batches assert that source file hashes are unchanged and that pixels
 outside the editable mask remain identical in uncompressed RGB. Later trials also

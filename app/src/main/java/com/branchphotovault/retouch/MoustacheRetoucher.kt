@@ -27,7 +27,9 @@ class MoustacheRetoucher(private val context: Context) {
         }
     }
 
-    fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH): Bitmap = synchronized(lock) {
+    fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH,
+        onProgress: (RetouchStage) -> Unit = {}): Bitmap = synchronized(lock) {
+        onProgress(RetouchStage.LOCATE)
         val face = faces(bitmap).getOrNull(faceIndex) ?: error("ไม่พบใบหน้า กรุณาเลือกภาพที่เห็นใบหน้าชัดเจน")
         val width = bitmap.width
         val height = bitmap.height
@@ -54,8 +56,10 @@ class MoustacheRetoucher(private val context: Context) {
             for (c in 0..2) input[c * PLANE + y * SIZE + x] =
                 sampleOriginal(original, width, height, sx, sy, c).roundToInt().coerceIn(0,255) / 127.5f - 1f
         }
-        val generated = runModel(input)
-        fun generatedAt(x: Int, y: Int, c: Int) = samplePlane(generated, a*x+b*y+tx, -b*x+a*y+ty, c)
+        onProgress(RetouchStage.ANALYSE)
+        val parsing = FaceParsingTool(context).analyse(input)
+        fun labelAt(x: Int,y: Int) = parsing.labelAt(a*x+b*y+tx,-b*x+a*y+ty)
+        onProgress(RetouchStage.PROTECT)
         val path = Path()
         fun polygon(points: List<PointF>, target: Path = path) {
             points.forEachIndexed { i, q -> if (i == 0) target.moveTo(q.x,q.y) else target.lineTo(q.x,q.y) }
@@ -88,6 +92,19 @@ class MoustacheRetoucher(private val context: Context) {
             canvas.drawPath(protected,paint)
             mask.getPixels(maskPixels,0,width,0,0,width,height)
         } finally { mask.recycle() }
+        var editablePixels = 0
+        for (i in maskPixels.indices) {
+            if (Color.alpha(maskPixels[i]) == 0) continue
+            if (!FaceParsingResult.allowsRetouch(labelAt(i%width,i/width))) maskPixels[i] = 0
+            else editablePixels++
+        }
+        require(editablePixels >= max(25,(span*span*.05f).toInt())) {
+            "AI แยกพื้นที่ผิวไม่ชัดเจน กรุณาลองภาพที่เห็นใบหน้าชัดกว่าเดิม"
+        }
+        onProgress(RetouchStage.GENERATE)
+        // Close each native session before starting the next to keep peak memory bounded.
+        val generated = runModel(input)
+        fun generatedAt(x: Int,y: Int,c: Int) = samplePlane(generated,a*x+b*y+tx,-b*x+a*y+ty,c)
         // Feather inward only: pixels outside the mask stay byte-identical to the input.
         val distance = FloatArray(original.size) { if (Color.alpha(maskPixels[it]) == 0) 0f else 1e6f }
         for (y in 0 until height) for (x in 0 until width) {
@@ -105,41 +122,63 @@ class MoustacheRetoucher(private val context: Context) {
             if (x+1 < width && y+1 < height) distance[i] = min(distance[i],distance[i+width+1]+1.414214f)
             if (x > 0 && y+1 < height) distance[i] = min(distance[i],distance[i+width-1]+1.414214f)
         }
+        onProgress(RetouchStage.COLOUR)
         val offsets = Array(3) { mutableListOf<Float>() }
+        val leftOffsets = Array(3) { mutableListOf<Float>() }
+        val rightOffsets = Array(3) { mutableListOf<Float>() }
         val radius = max(3,(span*.12f).toInt())
         val samples = HashSet<Int>()
         for (center in listOf(50,280,205,425).map(::p)) {
             val cx = center.x.toInt(); val cy = center.y.toInt()
             for (y in max(0,cy-radius)..min(height-1,cy+radius)) for (x in max(0,cx-radius)..min(width-1,cx+radius)) {
-                if ((x-cx)*(x-cx)+(y-cy)*(y-cy) <= radius*radius) samples.add(y*width+x)
+                if ((x-cx)*(x-cx)+(y-cy)*(y-cy) <= radius*radius && labelAt(x,y) == 1) samples.add(y*width+x)
             }
         }
-        require(samples.isNotEmpty()) { "ใบหน้าอยู่นอกขอบภาพ" }
+        require(samples.size >= 16) { "AI หาพื้นที่ผิวอ้างอิงไม่ได้ กรุณาลองภาพที่เห็นใบหน้าชัดกว่าเดิม" }
         for (i in samples) {
             val x = i%width; val y = i/width; val source = original[i]
             val first = rgbToLab(Color.red(source).toFloat(),Color.green(source).toFloat(),Color.blue(source).toFloat())
             val second = rgbToLab(generatedAt(x,y,0).toInt().toFloat(),generatedAt(x,y,1).toInt().toFloat(),generatedAt(x,y,2).toInt().toFloat())
-            for (c in 0..2) offsets[c].add(first[c]-second[c])
+            val side = if (a*x+b*y+tx < 128) leftOffsets else rightOffsets
+            for (c in 0..2) {
+                val difference = first[c]-second[c]
+                offsets[c].add(difference)
+                side[c].add(difference)
+            }
         }
         val offset = FloatArray(3) { c -> offsets[c].sorted().let { (it[(it.size-1)/2]+it[it.size/2])/2 } }
+        fun sideMedian(values: Array<MutableList<Float>>) = FloatArray(3) { c ->
+            if (values[c].size < 16) offset[c]
+            else values[c].sorted().let { (it[(it.size-1)/2]+it[it.size/2])/2 }
+        }
+        val leftOffset = sideMedian(leftOffsets)
+        val rightOffset = sideMedian(rightOffsets)
+        val unevenLight = abs(leftOffset[0]-rightOffset[0]) > 4f
+        onProgress(RetouchStage.TEXTURE)
         val output = original.copyOf()
         for (i in output.indices) {
             if (distance[i] <= 0f) continue
             val x = i%width; val y = i/width
             val lab = rgbToLab(generatedAt(x,y,0).toInt().toFloat(),generatedAt(x,y,1).toInt().toFloat(),generatedAt(x,y,2).toInt().toFloat())
-            val matched = labToRgb(lab[0]+offset[0],lab[1]+offset[1],lab[2]+offset[2])
+            val sideMix = ((a*x+b*y+tx-96)/64).coerceIn(0f,1f)
+            val localOffset = FloatArray(3) { c -> if (unevenLight) leftOffset[c]*(1-sideMix)+rightOffset[c]*sideMix else offset[c] }
             val source = original[i]
+            val sourceLab = rgbToLab(Color.red(source).toFloat(),Color.green(source).toFloat(),Color.blue(source).toFloat())
+            val guarded = SkinToneGuard.apply(sourceLab,FloatArray(3) { c -> lab[c]+localOffset[c] })
+            val matched = labToRgb(guarded[0],guarded[1],guarded[2])
             val alpha = (distance[i]/max(2f,span*.055f)).coerceIn(0f,1f)
             val channels = IntArray(3) { c ->
                 val value = channel(source,c).toFloat()
                 var average = 0f
                 for (yy in -1..1) for (xx in -1..1) average += channel(original[
                     (y+yy).coerceIn(0,height-1)*width+(x+xx).coerceIn(0,width-1)],c)
-                val fine = (value-average/9f).coerceIn(-2.5f,2.5f)*.6f
+                val fine = (value-average/9f).coerceIn(-2f,4f)*.7f
                 (value*(1-alpha)+(matched[c]+fine).coerceIn(0f,255f)*alpha).toInt().coerceIn(0,255)
             }
             output[i] = Color.rgb(channels[0],channels[1],channels[2])
         }
+        onProgress(RetouchStage.VERIFY)
+        check(output.indices.all { Color.alpha(maskPixels[it]) != 0 || output[it] == original[it] })
         Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888).apply { setPixels(output,0,width,0,0,width,height) }
     }
 
