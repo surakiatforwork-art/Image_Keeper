@@ -16,6 +16,9 @@ outside the repository. Do not attach them to an application release.
   and inward feathering. `--final-only` generates the selected direct blend family
   at 70%, 85%, and 100% without debug reconstruction images.
 - `retouch_contact_sheet.py`: overview of completed comparison sheets.
+- `retouch_adaptive_trial.py`: reblend existing private AttGAN outputs using
+  luminance/line evidence, with an optional lower-jaw prior. No network or model
+  download is used. This is a heuristic, not learned hair segmentation.
 
 All completed batches assert that source file hashes are unchanged and that pixels
 outside the editable mask remain identical in uncompressed RGB. Later trials also
@@ -81,3 +84,13 @@ This benchmark contains only one subject and no clean-shaven reference. Do not i
 cross-user reliability or exact anatomical preservation in regenerated regions.
 The user accepted this approach for integration. Runtime coverage and model
 provenance are recorded separately in the release notes and bundled sources notice.
+
+## Adaptive Follow-Up
+
+Tested two evidence-weighted refinements on the same ten private photos after
+v1.2.4. They retained more original mid-chin/clean-skin texture, but naive evidence
+weighting left more beard on backlit images. A lower-jaw prior recovered some of
+that reduction while keeping clean-skin blending weaker. This remains a tradeoff,
+not a clear improvement on every sample. Source hashes and pixels outside the
+previous edit region passed checks on all ten inputs. Do not silently replace the
+installed v1.2.4 behavior or issue an unchanged APK as a new quality release.
