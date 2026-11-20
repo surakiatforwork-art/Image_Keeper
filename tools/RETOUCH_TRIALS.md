@@ -4,6 +4,13 @@ These are desktop research tools supporting the Android integration. They never 
 photos. Keep private inputs, generated comparisons, downloaded code and weights
 outside the repository. Do not attach them to an application release.
 
+SDXL inpainting trials and measured findings are recorded in
+[`docs/retouch-sdxl-evaluation.md`](../docs/retouch-sdxl-evaluation.md).
+`retouch_diffusion_trial.py` prepares anatomical masks and runs pinned, local-only
+Diffusers inference. `download_verified_ranges.py` is an optional resumable
+download helper that checks range responses and the final whole-file SHA256.
+Neither tool changes the Android application's production model.
+
 ## Candidates
 
 - `retouch_trial.py`: bounded luminance closing, three strengths.
