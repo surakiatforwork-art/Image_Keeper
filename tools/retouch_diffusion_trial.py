@@ -40,7 +40,7 @@ def write_manifest(destination):
                           bytes=sum(row["bytes"] for row in manifest))), flush=True)
 
 
-def geometry(rgb, landmarks, size, jaw_margin=0., parser=None):
+def geometry(rgb, landmarks, size, jaw_margin=0., parser=None, tight_lips=False):
     import cv2
     import numpy as np
     height, width = rgb.shape[:2]
@@ -75,8 +75,12 @@ def geometry(rgb, landmarks, size, jaw_margin=0., parser=None):
         face_hull=cv2.dilate(face_hull,cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(extension*2+1,)*2))
     mask = cv2.bitwise_and(mask, face_hull)
     protected = np.zeros_like(mask)
-    for indices in ([61, 40, 37, 0, 267, 270, 291, 321, 314, 17, 84, 91], [98, 2, 327, 4]):
-        cv2.fillPoly(protected, [p[indices].astype(np.int32)], 255)
+    cv2.fillPoly(protected, [p[[61, 40, 37, 0, 267, 270, 291, 321, 314, 17, 84, 91]].astype(np.int32)], 255)
+    if tight_lips:
+        # Research opt-in: broad landmark lips can include surrounding whiskers.
+        radius=max(1,int(span*.035))
+        protected=cv2.erode(protected,cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(radius*2+1,)*2))
+    cv2.fillPoly(protected, [p[[98, 2, 327, 4]].astype(np.int32)], 255)
     protected = cv2.dilate(protected, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
     mask[protected > 0] = 0
     aligned = cv2.warpAffine(rgb, transform, (size, size), borderMode=cv2.BORDER_REFLECT_101)
@@ -87,7 +91,10 @@ def geometry(rgb, landmarks, size, jaw_margin=0., parser=None):
         labels=parser.run(None,{parser.get_inputs()[0].name:value})[0].squeeze().astype(np.uint8)
         labels=cv2.resize(labels,(size,size),interpolation=cv2.INTER_NEAREST)
         # Protect semantic anatomy and clothing, without demanding a confident skin label in shadows.
-        protected[np.isin(labels,[2,3,4,5,6,7,8,9,10,11,12,13,15,16,18])]=255
+        excluded=[2,3,4,5,6,7,8,9,10,15,16,18]
+        if not tight_lips:
+            excluded += [11,12,13]
+        protected[np.isin(labels,excluded)]=255
         mask[protected>0]=0
     inverse = cv2.invertAffineTransform(transform)
     original_mask = cv2.warpAffine(mask, inverse, (width, height), flags=cv2.INTER_NEAREST)
@@ -139,6 +146,12 @@ def run(args):
               "consistent natural skin tone and existing lighting, realistic facial anatomy")
     negative = ("beard, mustache, moustache, stubble, facial hair, different person, altered lips, "
                 "plastic skin, wax, white patch, makeup, beauty filter, deformed face, oversmoothed")
+    if args.prompt_style == "camera":
+        prompt=("unedited casual smartphone photograph, clean-shaven lower face, natural bare skin, "
+            "subtle uneven skin texture, existing facial folds, same exposure and directional shadows, "
+            "same camera softness and photographic grain as surrounding skin")
+        negative=("beard, mustache, moustache, stubble, facial hair, makeup, airbrushing, beauty filter, "
+            "skin smoothing, plastic skin, wax, glowing skin, studio portrait, retouched skin, altered lips")
     report = dict(model=MODEL_ID, revision=REVISION, device=torch.cuda.get_device_name(),
         torch=torch.__version__, size=args.size, steps=args.steps, seed=args.seed, guidance=args.guidance,
         prompt=prompt, negative_prompt=negative, model_load_seconds=time.perf_counter()-started, results=[])
@@ -151,6 +164,8 @@ def run(args):
         face_parser=ort.InferenceSession(str(args.parser),sess_options=settings,providers=["CPUExecutionProvider"])
     report["jaw_margin"]=args.jaw_margin
     report["semantic_protection"]=args.parser is not None
+    report["prompt_style"]=args.prompt_style
+    report["crop_padding"]=args.crop_padding
     try:
         with mp.tasks.vision.FaceLandmarker.create_from_options(options) as detector:
             for file in files:
@@ -176,10 +191,13 @@ def run(args):
                         generated = pipe(prompt=prompt, negative_prompt=negative,
                             image=Image.fromarray(aligned), mask_image=Image.fromarray(aligned_mask),
                             width=args.size, height=args.size, strength=strength, guidance_scale=args.guidance,
+                            padding_mask_crop=args.crop_padding,
                             num_inference_steps=args.steps, generator=torch.Generator("cpu").manual_seed(args.seed)).images[0]
                     torch.cuda.synchronize()
                     seconds = time.perf_counter()-tick
                     generated = np.array(generated.convert("RGB"))
+                    if args.save_raw:
+                        Image.fromarray(generated).save(output/f"{file.stem}_raw_{strength:.2f}.png")
                     restored = cv2.warpAffine(generated, cv2.invertAffineTransform(transform),
                         (rgb.shape[1], rgb.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
                     distance = cv2.distanceTransform(mask, cv2.DIST_L2, 5)
@@ -262,6 +280,9 @@ if __name__ == "__main__":
     trial.add_argument("--guidance", type=float, default=6.)
     trial.add_argument("--jaw-margin",type=float,default=0.)
     trial.add_argument("--parser",type=Path)
+    trial.add_argument("--prompt-style",choices=["default","camera"],default="default")
+    trial.add_argument("--crop-padding",type=int)
+    trial.add_argument("--save-raw",action="store_true")
     options = parser.parse_args()
     if options.command == "download":
         download(options.model)
