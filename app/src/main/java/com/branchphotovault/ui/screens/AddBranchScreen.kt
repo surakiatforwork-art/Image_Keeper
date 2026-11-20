@@ -126,13 +126,6 @@ fun AddBranchScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
-            OutlinedTextField(
-                value = uiState.routeText,
-                onValueChange = viewModel::updateRouteText,
-                label = { Text("Current Route (optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
             Button(
                 onClick = viewModel::submit,
                 enabled = !uiState.isSubmitting,

@@ -41,6 +41,9 @@ import com.branchphotovault.ui.components.GlassDropdown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -115,6 +118,7 @@ fun BranchListScreen(
             onSearchChange = viewModel::updateSearch,
             onAccountFilterChange = viewModel::updateAccountFilter,
             onSortChange = viewModel::updateSortOption,
+            onOnlyWithPhotosChange = viewModel::updateOnlyWithPhotos,
             onBranchClick = onOpenBranch
         )
     }
@@ -128,6 +132,7 @@ private fun BranchListContent(
     onSearchChange: (String) -> Unit,
     onAccountFilterChange: (String?) -> Unit,
     onSortChange: (BranchSortOption) -> Unit,
+    onOnlyWithPhotosChange: (Boolean) -> Unit,
     onBranchClick: (account: String, branchCode: String) -> Unit
 ) {
     var accountExpanded by remember { mutableStateOf(false) }
@@ -140,7 +145,12 @@ private fun BranchListContent(
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("สาขา",style=MaterialTheme.typography.headlineSmall)
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(checked=uiState.onlyWithPhotos,onCheckedChange=onOnlyWithPhotosChange,
+                        modifier=Modifier.semantics { contentDescription="เฉพาะร้านที่มีภาพ" })
+                    Text("เฉพาะร้านที่มีภาพ",style=MaterialTheme.typography.bodySmall,
+                        modifier=Modifier.clickable { onOnlyWithPhotosChange(!uiState.onlyWithPhotos) })
+                }
                 GlassSearchBar(
                     value = uiState.searchText,
                     onValueChange = onSearchChange,

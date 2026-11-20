@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.branchphotovault.ui.components.GlassToolbar as TopAppBar
 import com.branchphotovault.ui.components.GlassCard
+import com.branchphotovault.ui.components.rememberGallerySavePermission
 import com.branchphotovault.ui.components.glassBrush
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,26 +92,19 @@ fun BranchPreviewScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val saveWithPermission = rememberGallerySavePermission {
+        coroutineScope.launch { snackbarHostState.showSnackbar("กรุณาอนุญาตให้บันทึกภาพลงแกลเลอรี่") }
+    }
     val context = LocalContext.current
 
-    val defaultRouteAtCapture = uiState.branch?.currentRoute
+    val defaultRouteAtCapture: Int? = null
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showSendConfirmation by remember { mutableStateOf(false) }
-    var routeEditorVisible by remember { mutableStateOf(false) }
-    var routeDraft by remember(uiState.branch?.currentRoute, routeEditorVisible) {
-        mutableStateOf(uiState.branch?.currentRoute?.toString().orEmpty())
-    }
 
     val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            viewModel.importPhoto(
-                sourceUri = uri,
-                routeAtCapture = defaultRouteAtCapture,
-                note = null
-            )
-        }
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        viewModel.importPhotos(uris)
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -199,37 +193,6 @@ fun BranchPreviewScreen(
         )
     }
 
-    if (routeEditorVisible) {
-        AlertDialog(
-            onDismissRequest = { routeEditorVisible = false },
-            title = { Text("Update Route") },
-            text = {
-                OutlinedTextField(
-                    value = routeDraft,
-                    onValueChange = { routeDraft = it.filter(Char::isDigit) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Current Route") },
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        routeEditorVisible = false
-                        viewModel.updateRoute(routeDraft.toIntOrNull())
-                    }
-                ) {
-                    Text("Update")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { routeEditorVisible = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -249,7 +212,7 @@ fun BranchPreviewScreen(
                 },
                 actions = {
                     if (uiState.selectedPhotoIds.isNotEmpty()) {
-                        IconButton(onClick = viewModel::saveSelectedToGallery) {
+                        IconButton(onClick = { saveWithPermission(viewModel::saveSelectedToGallery) },enabled=!uiState.isProcessing) {
                             Icon(Icons.Rounded.Download, contentDescription = "Save selected to gallery")
                         }
                         IconButton(onClick = { showSendConfirmation = true }) {
@@ -260,10 +223,6 @@ fun BranchPreviewScreen(
                         }
                         IconButton(onClick = viewModel::clearSelection) {
                             Icon(Icons.Rounded.Close, contentDescription = "Clear selection")
-                        }
-                    } else {
-                        IconButton(onClick = { routeEditorVisible = true }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Update route")
                         }
                     }
                 }
@@ -352,20 +311,11 @@ fun BranchPreviewScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    RouteBadge(route = branch.currentRoute)
                                 }
                                 Text(
                                     text = "${uiState.photos.size} รูป",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
-                                FilledTonalButton(
-                                    onClick = viewModel::saveAllToGallery,
-                                    enabled = uiState.photos.isNotEmpty(),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(Icons.Rounded.Download, contentDescription = null)
-                                    Text("บันทึกทั้งหมดไปยังแกลเลอรี่")
-                                }
                             }
                         }
                     }

@@ -67,7 +67,6 @@ fun BranchListItemCard(
                     )
                     Text("${branch.photoCount} รูป",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                RouteBadge(route = branch.currentRoute)
             }
         }
     }

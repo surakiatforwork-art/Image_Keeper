@@ -22,13 +22,15 @@ class BranchRepository(
     fun observeBranches(
         searchText: String,
         accountFilter: String?,
-        sortOption: BranchSortOption
+        sortOption: BranchSortOption,
+        onlyWithPhotos: Boolean = false
     ): Flow<List<BranchListItem>> {
         return branchDao.observeBranchListItems(
             BranchQueryBuilder.build(
                 searchText = searchText,
                 accountFilter = accountFilter,
-                sortOption = sortOption
+                sortOption = sortOption,
+                onlyWithPhotos = onlyWithPhotos
             )
         )
     }

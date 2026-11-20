@@ -1,9 +1,10 @@
 package com.branchphotovault.data.model
 
 enum class BranchSortOption(val label: String) {
-    ROUTE("Route"),
     ACCOUNT("Account"),
     BRANCH_CODE("Branch Code"),
-    SHOP_NAME("Shop Name")
+    SHOP_NAME("Shop Name"),
+    OLDEST_FIRST("เวลา: เก่ากว่า → ล่าสุด"),
+    NEWEST_FIRST("เวลา: ล่าสุด → เก่ากว่า")
 }
 

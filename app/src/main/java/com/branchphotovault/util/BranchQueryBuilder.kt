@@ -9,7 +9,8 @@ object BranchQueryBuilder {
     fun build(
         searchText: String,
         accountFilter: String?,
-        sortOption: BranchSortOption
+        sortOption: BranchSortOption,
+        onlyWithPhotos: Boolean = false
     ): SupportSQLiteQuery {
         val sql = StringBuilder(
             """
@@ -57,18 +58,17 @@ object BranchQueryBuilder {
             """
             
             GROUP BY b.account, b.branchCode, b.shopName, b.currentRoute, b.rowNumber, b.updatedAt
-            ORDER BY 
             """.trimIndent()
         )
+        if (onlyWithPhotos) sql.append("\nHAVING COUNT(p.id) > 0")
+        sql.append("\nORDER BY ")
 
         when (sortOption) {
-            BranchSortOption.ROUTE -> sql.append(
-                "CASE WHEN b.currentRoute IS NULL THEN 1 ELSE 0 END, b.currentRoute ASC, b.account ASC, b.branchCode ASC"
-            )
-
             BranchSortOption.ACCOUNT -> sql.append("b.account ASC, b.branchCode ASC")
             BranchSortOption.BRANCH_CODE -> sql.append("b.branchCode ASC, b.account ASC")
             BranchSortOption.SHOP_NAME -> sql.append("b.shopName COLLATE NOCASE ASC, b.account ASC")
+            BranchSortOption.OLDEST_FIRST -> sql.append("MAX(p.createdAt) IS NULL, MAX(p.createdAt) ASC, b.account ASC, b.branchCode ASC")
+            BranchSortOption.NEWEST_FIRST -> sql.append("MAX(p.createdAt) IS NULL, MAX(p.createdAt) DESC, b.account ASC, b.branchCode ASC")
         }
 
         return SimpleSQLiteQuery(sql.toString(), args.toTypedArray())

@@ -16,6 +16,7 @@ import com.branchphotovault.util.DateTimeUtils
 import com.branchphotovault.util.FileStorageManager
 import com.branchphotovault.util.ImageProcessor
 import com.branchphotovault.util.MediaStoreExporter
+import com.branchphotovault.util.GalleryNaming
 import com.branchphotovault.worker.ExportPhotosWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -177,18 +178,15 @@ class PhotoRepository(
         photos: List<PhotoEntity>,
         onProgress: suspend (exported: Int, total: Int) -> Unit
     ): ExportSummary {
-        val folderPattern = settingsRepository.getExportFolderPattern()
         var exported = 0
         var failed = 0
         val total = photos.size
 
         photos.forEachIndexed { index, photo ->
-            val folderName = resolveExportFolder(folderPattern, photo)
-            val displayName = "${photo.branchCode}_${photo.id}.jpg"
+            val displayName = GalleryNaming.fileName(photo.account, photo.branchCode)
             val success = mediaStoreExporter.exportImage(
                 sourceFile = File(photo.localMainPath),
-                displayName = displayName,
-                folderName = folderName
+                displayName = displayName
             )
             if (success) {
                 exported += 1
@@ -302,15 +300,4 @@ class PhotoRepository(
         }
     }
 
-    private fun resolveExportFolder(pattern: String, photo: PhotoEntity): String {
-        return pattern
-            .replace("{account}", sanitizeFolderName(photo.account))
-            .replace("{branchCode}", sanitizeFolderName(photo.branchCode))
-            .replace("{shopName}", sanitizeFolderName(photo.shopName))
-            .ifBlank { "${sanitizeFolderName(photo.account)}_${sanitizeFolderName(photo.branchCode)}" }
-    }
-
-    private fun sanitizeFolderName(value: String): String {
-        return value.trim().replace(Regex("[\\\\/:*?\"<>|]"), "_")
-    }
 }

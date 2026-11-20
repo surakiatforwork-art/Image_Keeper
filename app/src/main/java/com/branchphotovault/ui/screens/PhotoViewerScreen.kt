@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import com.branchphotovault.ui.components.GlassToolbar as TopAppBar
 import com.branchphotovault.ui.components.ZoomableImageViewport
 import com.branchphotovault.ui.components.ImageZoomState
+import com.branchphotovault.ui.components.rememberGallerySavePermission
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,6 +79,10 @@ fun PhotoViewerScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { uiState.photos.size })
     val context = LocalContext.current
+    val permissionScope = rememberCoroutineScope()
+    val saveWithPermission = rememberGallerySavePermission {
+        permissionScope.launch { android.widget.Toast.makeText(context,"กรุณาอนุญาตให้บันทึกภาพลงแกลเลอรี่",android.widget.Toast.LENGTH_SHORT).show() }
+    }
     val scope = rememberCoroutineScope()
     var activeZoomed by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -261,7 +266,7 @@ fun PhotoViewerScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             FilledTonalButton(
-                                onClick = { viewModel.savePhotoToGallery(photo.id) },
+                                onClick = { saveWithPermission { viewModel.savePhotoToGallery(photo.id) } },
                                 enabled = !uiState.isSavingToGallery && !uiState.isDeleting,
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -306,7 +311,6 @@ fun PhotoViewerScreen(
                                     Text("ฉบับรีทัชหนวด · ต้นฉบับเก็บแยกไว้", color = MaterialTheme.colorScheme.primary)
                                 }
                                 Text("${photo.account} • ${photo.branchCode}",style=MaterialTheme.typography.bodySmall)
-                                Text("Route at capture: ${photo.routeAtCapture ?: "-"}",style=MaterialTheme.typography.labelSmall)
                                 Text(
                                     "Captured: ${
                                         DateFormat.getMediumDateFormat(context).format(Date(photo.createdAt))

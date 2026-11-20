@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
 data class BranchListUiState(
     val searchText: String = "",
     val selectedAccount: String? = null,
-    val sortOption: BranchSortOption = BranchSortOption.ROUTE,
+    val sortOption: BranchSortOption = BranchSortOption.ACCOUNT,
+    val onlyWithPhotos: Boolean = false,
     val branches: List<BranchListItem> = emptyList(),
     val lastSyncAt: Long? = null,
     val isSyncing: Boolean = false,
@@ -43,17 +44,21 @@ class BranchListViewModel(
 
     private val searchText = MutableStateFlow("")
     private val selectedAccount = MutableStateFlow<String?>(null)
-    private val sortOption = MutableStateFlow(BranchSortOption.ROUTE)
+    private val sortOption = MutableStateFlow(BranchSortOption.ACCOUNT)
+    private val onlyWithPhotos = MutableStateFlow(false)
     private val isSyncing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
 
-    private val branchesFlow = combine(searchText, selectedAccount, sortOption) { search, account, sort ->
-        Triple(search, account, sort)
-    }.flatMapLatest { (search, account, sort) ->
+    private data class BranchFilters(val search: String, val account: String?, val sort: BranchSortOption, val withPhotos: Boolean)
+
+    private val branchesFlow = combine(searchText, selectedAccount, sortOption, onlyWithPhotos) { search, account, sort, withPhotos ->
+        BranchFilters(search, account, sort, withPhotos)
+    }.flatMapLatest { (search, account, sort, withPhotos) ->
         branchRepository.observeBranches(
             searchText = search,
             accountFilter = account,
-            sortOption = sort
+            sortOption = sort,
+            onlyWithPhotos = withPhotos
         )
     }
 
@@ -76,12 +81,14 @@ class BranchListViewModel(
     val uiState: StateFlow<BranchListUiState> = combine(
         inputsFlow,
         branchesFlow,
-        settingsRepository.lastSyncAtFlow
-    ) { inputs, branches, lastSyncAt ->
+        settingsRepository.lastSyncAtFlow,
+        onlyWithPhotos
+    ) { inputs, branches, lastSyncAt, withPhotos ->
         BranchListUiState(
             searchText = inputs.searchText,
             selectedAccount = inputs.selectedAccount,
             sortOption = inputs.sortOption,
+            onlyWithPhotos = withPhotos,
             branches = branches,
             lastSyncAt = lastSyncAt,
             isSyncing = inputs.isSyncing,
@@ -103,6 +110,10 @@ class BranchListViewModel(
 
     fun updateSortOption(value: BranchSortOption) {
         sortOption.value = value
+    }
+
+    fun updateOnlyWithPhotos(value: Boolean) {
+        onlyWithPhotos.value = value
     }
 
     fun syncBranches() {

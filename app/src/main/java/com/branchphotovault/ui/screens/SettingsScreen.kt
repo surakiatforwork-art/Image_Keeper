@@ -91,13 +91,13 @@ fun SettingsScreen(
                 supportingText = { Text("Default cleanup target is 3 months.") },
                 singleLine = true
             )
-            OutlinedTextField(
-                value = uiState.exportFolderPattern,
-                onValueChange = viewModel::updateExportPattern,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Export Folder Pattern") },
-                supportingText = { Text("Supported placeholders: {account}, {branchCode}, {shopName}") }
-            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("โฟลเดอร์แกลเลอรี่",style=androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                    Text("Pictures/Image Keeper")
+                    Text("ชื่อไฟล์: Account_เลขสาขา_วันเวลาบันทึก_รหัสไม่ซ้ำ.jpg")
+                }
+            }
             SettingsChoiceCard(
                 title = "Saved Image Size",
                 supportingText = "Applied to new photos captured or imported into the app.",

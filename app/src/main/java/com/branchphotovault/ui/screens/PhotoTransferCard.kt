@@ -112,7 +112,7 @@ internal fun PhotoTransferCard() {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("นำเข้า / ส่งออกรูป", style = MaterialTheme.typography.titleMedium)
-            Text("ไฟล์ Keeper ZIP เก็บภาพพร้อมข้อมูลสาขา รูท และวันที่ เว้นวันที่ว่างและเลือกร้านทั้งหมดเพื่อถ่ายโอนทุกรูป")
+            Text("ไฟล์ Keeper ZIP เก็บภาพพร้อมข้อมูลสาขาและวันที่ เว้นวันที่ว่างและเลือกร้านทั้งหมดเพื่อถ่ายโอนทุกรูป")
             OutlinedTextField(from, { from = it }, label = { Text("วันเริ่ม YYYY-MM-DD") }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(through, { through = it }, label = { Text("วันสิ้นสุด YYYY-MM-DD") }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
             Box {

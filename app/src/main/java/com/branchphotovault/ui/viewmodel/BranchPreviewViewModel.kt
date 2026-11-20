@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 data class BranchPreviewUiState(
     val branch: BranchEntity? = null,
@@ -113,21 +114,23 @@ class BranchPreviewViewModel(
         selectedPhotoIds.value = emptyList()
     }
 
-    fun importPhoto(sourceUri: Uri, routeAtCapture: Int?, note: String?) {
+    fun importPhotos(sourceUris: List<Uri>, note: String? = null) {
+        if (isProcessing.value || sourceUris.isEmpty()) return
         val branch = uiState.value.branch ?: return
-
+        val sources = sourceUris.distinct().toList()
+        isProcessing.value = true
         viewModelScope.launch {
-            isProcessing.value = true
             try {
-                photoRepository.importPhoto(
-                    branch = branch,
-                    sourceUri = sourceUri,
-                    routeAtCapture = routeAtCapture,
-                    note = note
-                )
-                message.value = "Photo imported."
-            } catch (error: Exception) {
-                message.value = error.message ?: "Import failed."
+                var imported = 0
+                var failed = 0
+                for (uri in sources) {
+                    try {
+                        photoRepository.importPhoto(branch, uri, routeAtCapture = null, note = note)
+                        imported++
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { failed++ }
+                }
+                message.value = "นำเข้า $imported รูป" + if (failed > 0) " · ไม่สำเร็จ $failed รูป" else "สำเร็จ"
             } finally {
                 isProcessing.value = false
             }
@@ -196,15 +199,6 @@ class BranchPreviewViewModel(
         } else {
             "$destination is not installed or a selected image is unavailable."
         }
-    }
-
-    fun saveAllToGallery() {
-        val photos = uiState.value.photos
-        if (photos.isEmpty()) return
-
-        exportToGallery(
-            photos = photos
-        )
     }
 
     fun deleteSelected() {
