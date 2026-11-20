@@ -1,8 +1,6 @@
 package com.branchphotovault.ui.screens
 
 import android.graphics.*
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,16 +10,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.Alignment
-import com.branchphotovault.ui.components.ZoomableImageViewport
 import com.branchphotovault.ui.components.GlassButton
 import com.branchphotovault.ui.components.GlassSecondaryButton
-import com.branchphotovault.ui.components.glassBrush
+import com.branchphotovault.ui.components.ManualRetouchEditor
+import com.branchphotovault.retouch.RetouchBounds
 import androidx.compose.ui.unit.dp
 import com.branchphotovault.LocalAppContainer
 import com.branchphotovault.data.local.PhotoEntity
@@ -33,7 +28,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -42,14 +36,15 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     val repository = LocalAppContainer.current.photoRepository
     val scope = rememberCoroutineScope()
     var original by remember { mutableStateOf<Bitmap?>(null) }
-    var faceGuide by remember { mutableStateOf<Bitmap?>(null) }
+    var faceBounds by remember { mutableStateOf<List<RetouchBounds>>(emptyList()) }
     var result by remember { mutableStateOf<Bitmap?>(null) }
+    var composite by remember { mutableStateOf<Bitmap?>(null) }
     var faceCount by remember { mutableStateOf(0) }
     var face by remember { mutableStateOf(0) }
     var region by remember { mutableStateOf(RetouchRegion.BOTH) }
     var busy by remember { mutableStateOf(true) }
-    var before by remember { mutableStateOf(false) }
     var zoomed by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
     var strength by remember { mutableFloatStateOf(.85f) }
     var message by remember { mutableStateOf("กำลังตรวจใบหน้า…") }
     LaunchedEffect(photo.id) {
@@ -68,20 +63,11 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
             original = loaded
             val faces = withContext(Dispatchers.Default) { MoustacheRetoucher(context).faces(loaded) }
             faceCount = faces.size
-            if (faceCount > 1) {
-                faceGuide = loaded.copy(Bitmap.Config.ARGB_8888,true).also { guide ->
-                    val canvas = Canvas(guide)
-                    faces.forEachIndexed { index, points ->
-                        val x = points[1].x() * guide.width
-                        val y = points[10].y() * guide.height
-                        val size = (guide.width * 0.045f).coerceAtLeast(24f)
-                        canvas.drawCircle(x,y,size,Paint().apply { color = Color.BLACK })
-                        canvas.drawText("${index+1}",x,y+size*0.35f,Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = Color.WHITE; textSize = size; textAlign = Paint.Align.CENTER
-                        })
-                    }
-                }
-            }
+            faceBounds=faces.map { points -> RetouchBounds(
+                (points.minOf { it.x() }-.03f).coerceIn(0f,1f),
+                (points.minOf { it.y() }-.03f).coerceIn(0f,1f),
+                (points.maxOf { it.x() }+.03f).coerceIn(0f,1f),
+                (points.maxOf { it.y() }+.03f).coerceIn(0f,1f)) }
             message = if (faceCount > 0) "เลือกใบหน้า แล้วกดรีทัช · ต้นฉบับจะถูกเก็บไว้" else "ไม่พบใบหน้าในภาพ"
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
@@ -93,7 +79,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     }
     BackHandler(enabled = busy) {}
     val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true,
-        confirmValueChange={ (!busy && !zoomed) || it==SheetValue.Expanded })
+        confirmValueChange={ (!busy && !zoomed && !editing) || it==SheetValue.Expanded })
     val sheetShape=RoundedCornerShape(topStart=32.dp,topEnd=32.dp)
     ModalBottomSheet(
         sheetState=sheetState,
@@ -110,34 +96,28 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 original?.let { source ->
-                    ZoomableImageViewport(photo.id,Modifier.fillMaxWidth().height(260.dp).testTag("retouch-preview"),
-                        imageSize=IntSize(source.width,source.height),onZoomChanged={ zoomed=it }) {
-                        Image((if (result == null) faceGuide ?: source else source).asImageBitmap(),null,Modifier.fillMaxSize())
-                        if (!before) result?.let { edited ->
-                            Image(edited.asImageBitmap(),null,Modifier.fillMaxSize(),alpha = strength)
-                        }
-                    }
+                    ManualRetouchEditor(source,result,strength,busy,faceBounds.getOrNull(face),
+                        onZoomChanged={ zoomed=it },onEditingChanged={ editing=it },onRendered={ composite=it })
                 }
                 Text(message)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     RetouchRegion.entries.forEach { option ->
                         FilterChip(selected = region == option, enabled = !busy,
-                            onClick = { region = option; result = null; before = false },
+                            onClick = { region = option; result = null; composite = null },
                             label = { Text(option.label) })
                     }
                 }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (faceCount > 1) Row {
-                    TextButton(enabled = !busy,onClick = { face = (face+1)%faceCount; result = null }) { Text("ใบหน้า ${face+1}/$faceCount (ลำดับตรวจพบ)") }
+                    TextButton(enabled = !busy,onClick = { face = (face+1)%faceCount; result = null; composite=null }) { Text("ใบหน้า ${face+1}/$faceCount (ลำดับตรวจพบ)") }
                 }
                 result?.let {
-                    TextButton(onClick = { before = !before }) { Text(if (before) "ดูหลังแต่ง" else "ดูต้นฉบับ") }
                     Text("ความแรง ${(strength*100).toInt()}%")
-                    Slider(strength,{ strength = it },enabled = !busy)
+                    Slider(strength,{ composite=null; strength = it },enabled = !busy)
                 }
                 GlassButton(modifier=Modifier.fillMaxWidth(),enabled = !busy && faceCount > 0,onClick = {
                     val source = original ?: return@GlassButton
-                    busy = true; result = null; before = false; message = "กำลังวิเคราะห์ภาพ…"
+                    busy = true; result = null; composite=null; message = "กำลังวิเคราะห์ภาพ…"
                     scope.launch {
                         try {
                             result = withContext(Dispatchers.Default) {
@@ -157,16 +137,16 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
             }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 GlassSecondaryButton(enabled=!busy,onClick=dismiss,modifier=Modifier.weight(1f)) { Text("ยกเลิก") }
-                GlassButton(modifier=Modifier.weight(1.5f),enabled = !busy && result != null,onClick = {
+                GlassButton(modifier=Modifier.weight(1.5f),enabled = !busy && composite != null,onClick = {
             val source = original ?: return@GlassButton
-            val edited = result ?: return@GlassButton
+            val edited = composite ?: return@GlassButton
             busy = true
             scope.launch {
                 try {
                     withContext(Dispatchers.IO + NonCancellable) {
                         val output = source.copy(Bitmap.Config.ARGB_8888,true)
                         try {
-                            Canvas(output).drawBitmap(edited,0f,0f,Paint().apply { alpha = (strength*255).toInt() })
+                            Canvas(output).drawBitmap(edited,0f,0f,null)
                             repository.saveRetouchedCopy(photo,output)
                         } finally { output.recycle() }
                     }

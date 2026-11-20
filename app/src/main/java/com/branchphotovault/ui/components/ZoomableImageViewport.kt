@@ -50,6 +50,7 @@ fun ZoomableImageViewport(
     imageSize: IntSize = IntSize.Zero,
     onZoomChanged: (Boolean) -> Unit = {},
     state: ImageZoomState = remember(imageKey) { ImageZoomState() },
+    gesturesEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit
 ) {
     val notify by rememberUpdatedState(onZoomChanged)
@@ -63,8 +64,9 @@ fun ZoomableImageViewport(
                     state.transform(1.5f,Offset.Zero,Offset(state.viewport.width/2f,state.viewport.height/2f)); true
                 })
         }
-        .pointerInput(imageKey,state) { detectTapGestures(onDoubleTap={ state.reset() }) }
-        .pointerInput(imageKey,state) {
+        .pointerInput(imageKey,state,gesturesEnabled) { if(gesturesEnabled) detectTapGestures(onDoubleTap={ state.reset() }) }
+        .pointerInput(imageKey,state,gesturesEnabled) {
+            if(!gesturesEnabled) return@pointerInput
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
                 var claimed=false

@@ -46,7 +46,7 @@ class RetouchSheetGestureTest {
             compose.onNodeWithTag("retouch-preview").performTouchInput { advanceEventTime(500); doubleClick(center) }
             assertEquals("Fit",compose.onNodeWithTag("retouch-preview").fetchSemanticsNode().config[SemanticsProperties.StateDescription])
             compose.onNodeWithText("บันทึกฉบับแต่ง").assertIsNotEnabled()
-            compose.onNodeWithText("ยกเลิก").performClick()
+            compose.onNodeWithText("ยกเลิก").performScrollTo().performClick()
             compose.runOnIdle { assertTrue(dismissed) }
             assertTrue(file.exists())
         } finally { file.delete() }

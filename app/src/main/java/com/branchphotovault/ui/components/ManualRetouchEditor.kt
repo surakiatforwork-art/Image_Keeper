@@ -1,0 +1,198 @@
+package com.branchphotovault.ui.components
+
+import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.*
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import com.branchphotovault.retouch.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.math.min
+import kotlin.math.max
+
+private enum class RetouchTool(val label: String) { PAN("ขยาย/เลื่อน"), FRAME("กรอบใบหน้า"), PAINT("ทารีทัช"), RESTORE("คืนต้นฉบับ") }
+private data class EditSnapshot(val strokes: List<RetouchStroke> = emptyList(), val bounds: RetouchBounds? = null)
+
+@Composable
+fun HoldOriginalButton(enabled: Boolean, onHolding: (Boolean) -> Unit) {
+    val holding by rememberUpdatedState(onHolding)
+    DisposableEffect(enabled) { onDispose { holding(false) } }
+    Box(Modifier.size(48.dp).testTag("hold-original").semantics {
+        contentDescription="กดค้างดูต้นฉบับ ปล่อยเพื่อดูภาพแต่ง"
+        role=Role.Button
+        if(!enabled) disabled()
+        customActions=if(enabled) listOf(
+            CustomAccessibilityAction("แสดงต้นฉบับ") { holding(true); true },
+            CustomAccessibilityAction("กลับภาพแต่ง") { holding(false); true }) else emptyList()
+    }.pointerInput(enabled) {
+        if(enabled) detectTapGestures(onPress={
+            holding(true)
+            try { tryAwaitRelease() } finally { holding(false) }
+        })
+    },contentAlignment=Alignment.Center) {
+        Icon(Icons.Outlined.Compare,null,tint=if(enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha=.35f))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, busy: Boolean,
+    detectedBounds: RetouchBounds?, onZoomChanged: (Boolean) -> Unit, onEditingChanged: (Boolean) -> Unit,
+    onRendered: (Bitmap?) -> Unit) {
+    var tool by remember(source,generated) { mutableStateOf(RetouchTool.PAN) }
+    var before by remember { mutableStateOf(false) }
+    var radius by remember { mutableFloatStateOf(.035f) }
+    val history=remember(source,generated) { mutableStateListOf(EditSnapshot()) }
+    val redo=remember(source,generated) { mutableStateListOf<EditSnapshot>() }
+    val edit=history.last()
+    var rendered by remember(source,generated) { mutableStateOf<Bitmap?>(null) }
+    var rendering by remember { mutableStateOf(false) }
+    var renderError by remember { mutableStateOf<String?>(null) }
+    var drag by remember { mutableStateOf<List<RetouchPoint>>(emptyList()) }
+    val report by rememberUpdatedState(onRendered)
+    val edited by rememberUpdatedState(onEditingChanged)
+    val zoom=remember(source) { ImageZoomState() }
+    val renderLock=remember(source) { Mutex() }
+    fun commit(next: EditSnapshot) {
+        report(null)
+        history.add(next)
+        if(history.size>31) history.removeAt(0)
+        redo.clear()
+    }
+    LaunchedEffect(tool) { edited(tool!=RetouchTool.PAN) }
+    DisposableEffect(Unit) { onDispose { edited(false) } }
+    LaunchedEffect(source,generated,edit,strength) {
+        report(null)
+        rendered=null
+        renderError=null
+        if(generated==null) return@LaunchedEffect
+        rendering=true
+        var pending: Bitmap?=null
+        try {
+            val output=withContext(Dispatchers.Default) {
+                renderLock.withLock {
+                    coroutineContext.ensureActive()
+                    ManualRetouch.compose(source,generated,edit.strokes,strength,edit.bounds).also { pending=it }
+                }
+            }
+            rendered=output
+            report(output)
+            pending=null
+        } catch(cancelled: CancellationException) { throw cancelled }
+        catch(_: Exception) { renderError="เตรียมภาพไม่สำเร็จ กรุณาลองย้อนกลับหรือปรับความแรงอีกครั้ง" }
+        finally { pending?.recycle(); rendering=false }
+    }
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        ZoomableImageViewport(source,Modifier.fillMaxWidth().height(300.dp).testTag("retouch-preview"),
+            IntSize(source.width,source.height),onZoomChanged,state=zoom,gesturesEnabled=tool==RetouchTool.PAN) {
+            Image((if(before) source else rendered ?: source).asImageBitmap(),null,Modifier.fillMaxSize())
+            Canvas(Modifier.fillMaxSize().semantics { stateDescription=if(before) "Original" else "Edited" }
+                .pointerInput(tool,busy,rendering,radius,edit) {
+                    if(tool==RetouchTool.PAN || busy || rendering) return@pointerInput
+                    val fit=min(size.width.toFloat()/source.width,size.height.toFloat()/source.height)
+                    val width=source.width*fit; val height=source.height*fit
+                    val left=(size.width-width)/2; val top=(size.height-height)/2
+                    fun point(p: Offset)=RetouchPoint(((p.x-left)/width).coerceIn(0f,1f),((p.y-top)/height).coerceIn(0f,1f))
+                    awaitEachGesture {
+                        val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
+                        val valid=down.position.x in left..left+width && down.position.y in top..top+height
+                        if(!valid) return@awaitEachGesture
+                        down.consume()
+                        report(null)
+                        drag=listOf(point(down.position))
+                        var cancelled=false
+                        var committed=false
+                        try {
+                            do {
+                                val event=awaitPointerEvent(PointerEventPass.Initial)
+                                if(event.changes.count { it.pressed }>1) cancelled=true
+                                event.changes.forEach { change ->
+                                    if(change.id==down.id && drag.size<1500) drag=drag+point(change.position)
+                                    change.consume()
+                                }
+                            } while(event.changes.any { it.pressed })
+                        if(!cancelled && drag.isNotEmpty()) {
+                            if(tool==RetouchTool.FRAME) {
+                                val a=drag.first(); val b=drag.last()
+                                if(kotlin.math.abs(a.x-b.x)>.02f && kotlin.math.abs(a.y-b.y)>.02f) {
+                                    commit(edit.copy(bounds=RetouchBounds(min(a.x,b.x),min(a.y,b.y),max(a.x,b.x),max(a.y,b.y))))
+                                    committed=true
+                                }
+                            } else {
+                                commit(edit.copy(strokes=edit.strokes+RetouchStroke(drag,radius,tool==RetouchTool.RESTORE)))
+                                committed=true
+                            }
+                        }
+                        } finally {
+                            drag=emptyList()
+                            if(!committed) report(rendered)
+                        }
+                    }
+                }) {
+                if(before) return@Canvas
+                val fit=min(size.width/source.width,size.height/source.height)
+                val width=source.width*fit; val height=source.height*fit
+                val origin=Offset((size.width-width)/2,(size.height-height)/2)
+                fun pos(p: RetouchPoint)=origin+Offset(p.x*width,p.y*height)
+                val bounds=edit.bounds ?: if(tool==RetouchTool.FRAME || generated==null) detectedBounds else null
+                bounds?.let {
+                    drawRect(Color(0xFF39C8AE),origin+Offset(it.left*width,it.top*height),Size((it.right-it.left)*width,(it.bottom-it.top)*height),style=Stroke(2.dp.toPx()))
+                }
+                if(drag.isNotEmpty()) {
+                    if(tool==RetouchTool.FRAME) {
+                        val a=pos(drag.first()); val b=pos(drag.last())
+                        drawRect(Color.Yellow,Offset(min(a.x,b.x),min(a.y,b.y)),Size(kotlin.math.abs(b.x-a.x),kotlin.math.abs(b.y-a.y)),style=Stroke(2.dp.toPx()))
+                    } else drag.forEach { drawCircle(if(tool==RetouchTool.RESTORE) Color(0x55FF7272) else Color(0x5539C8AE),radius*min(width,height),pos(it)) }
+                }
+            }
+        }
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            RetouchTool.entries.forEach { option ->
+                FilterChip(selected=tool==option,enabled=!busy && (!rendering) && (option==RetouchTool.PAN || generated!=null),
+                    onClick={ tool=option },label={ Text(option.label) })
+            }
+        }
+        if(tool==RetouchTool.FRAME) {
+            Text("ลากกรอบเพื่อจำกัดพื้นที่แต่ง • ไม่เปลี่ยนจุดตา/ปากที่ AI ตรวจพบ",style=MaterialTheme.typography.bodySmall)
+            Row {
+                TextButton(enabled=!busy && !rendering && detectedBounds!=null,onClick={ commit(edit.copy(bounds=detectedBounds)) }) { Text("ใช้กรอบที่ตรวจพบ") }
+                TextButton(enabled=!busy && !rendering && edit.bounds!=null,onClick={ commit(edit.copy(bounds=null)) }) { Text("ไม่จำกัดกรอบ") }
+            }
+        }
+        if(tool==RetouchTool.PAINT || tool==RetouchTool.RESTORE) {
+            Text("ขนาดแปรง ${(radius*200).toInt()}% • เลือกขยาย/เลื่อนเพื่อซูม",style=MaterialTheme.typography.bodySmall)
+            Slider(radius,{ radius=it },valueRange=.01f.. .12f,enabled=!busy && !rendering)
+        }
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            IconButton(enabled=!busy && !rendering && history.size>1,onClick={ report(null); redo.add(history.removeAt(history.lastIndex)) }) { Icon(Icons.Outlined.Undo,"ย้อนกลับ") }
+            IconButton(enabled=!busy && !rendering && redo.isNotEmpty(),onClick={ report(null); history.add(redo.removeAt(redo.lastIndex)) }) { Icon(Icons.Outlined.Redo,"ทำซ้ำ") }
+            Spacer(Modifier.weight(1f))
+            HoldOriginalButton(generated!=null && !busy) { before=it }
+        }
+        if(rendering) LinearProgressIndicator(Modifier.fillMaxWidth())
+        renderError?.let { Text(it,color=MaterialTheme.colorScheme.error) }
+        if(tool==RetouchTool.PAINT) Text("ทากลับได้เฉพาะบริเวณที่ AI สร้างผลรีทัชไว้",style=MaterialTheme.typography.bodySmall)
+    }
+}
