@@ -3,7 +3,15 @@ package com.branchphotovault.retouch
 import android.graphics.*
 
 data class RetouchPoint(val x: Float, val y: Float)
-data class RetouchStroke(val points: List<RetouchPoint>, val radius: Float, val restore: Boolean)
+data class RetouchStroke(
+    val points: List<RetouchPoint>,
+    val radius: Float,
+    val restore: Boolean,
+    // With healing enabled, sampled skin is regenerated independently of
+    // AttGAN; it works even if the AI never edited these pixels.
+    val heal: Boolean = false,
+    val donor: RetouchPoint? = null
+)
 data class RetouchBounds(val left: Float, val top: Float, val right: Float, val bottom: Float)
 
 /** Edits only the generated layer; the source and protected pixels remain unchanged. */
@@ -22,6 +30,10 @@ object ManualRetouch {
             val canvas=Canvas(mask)
             for (stroke in strokes) {
                 if(stroke.points.isEmpty()) continue
+                // True manual healing, NOT repainting an unchanged AttGAN
+                // result: use a clean-skin sample and source texture to
+                // replace hair wherever the user paints.
+                if(stroke.heal && !stroke.restore) ManualSkinHeal.repair(layer,stroke)
                 val radius=(stroke.radius*minOf(w,h)).coerceAtLeast(1f)
                 val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color=Color.WHITE; style=Paint.Style.STROKE; strokeWidth=radius*2

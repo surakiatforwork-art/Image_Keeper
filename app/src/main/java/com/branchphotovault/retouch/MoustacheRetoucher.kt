@@ -43,6 +43,7 @@ class MoustacheRetoucher(private val context: Context) {
         engine: RetouchEngine = RetouchEngine.BASELINE,
         onDiagnostics: ((Bitmap, HairMaskDiagnostics.Stats) -> Unit)? = null,
         extraDetail: Boolean = false,
+        extraDetailStrength: Float = .28f,
         onProgress: (RetouchStage) -> Unit = {}
     ): Bitmap = synchronized(lock) {
         onProgress(RetouchStage.LOCATE)
@@ -482,27 +483,34 @@ class MoustacheRetoucher(private val context: Context) {
             val scanLeft = max(0,(min(p(234).x,p(454).x)-span*.1f).toInt())
             val scanRight = min(width-1,(max(p(234).x,p(454).x)+span*.1f).toInt())
             var corrected=0
+            val baselineForDetail=finalPixels.copyOf()
+            val textureRadius=(span*.04f).toInt().coerceIn(3,12)
             for (yy in scanTop..scanBottom) for (xx in scanLeft..scanRight) {
                 val i=yy*width+xx
                 if (maskPixels[i]==Color.TRANSPARENT || distance[i]<=0f) continue
                 val jawWeight=refinementJawGuard.weightAt(xx,yy)
                 if (jawWeight<.995f) continue
                 val feather=(distance[i]/max(2f,span*.055f)).coerceIn(0f,1f)
-                val weight=feather*jawWeight*.60f
+                // The second model may shift RGB hues independently,
+                // creating unnatural skin seams. Convert its normalized
+                // ONNX output into a SMALL, mostly luminance correction.
+                // Keep original AttGAN chroma, texture and face geometry.
+                val hairWeight=ResidualHairDetailGate.weight(
+                    baselineForDetail,width,height,xx,yy,textureRadius)
+                val weight=feather*jawWeight*extraDetailStrength.coerceIn(0f,.65f)*hairWeight
                 if (weight<=0f) continue
                 val u=a*xx+b*yy+tx
                 val v=-b*xx+a*yy+ty
                 val current=finalPixels[i]
-                val r=AttganDetailBlend.channel(
-                    Color.red(current),samplePlane(generated,u,v,0),
-                    samplePlane(shiftedGenerated,u,v-25f,0),weight)
-                val g=AttganDetailBlend.channel(
-                    Color.green(current),samplePlane(generated,u,v,1),
-                    samplePlane(shiftedGenerated,u,v-25f,1),weight)
-                val blue=AttganDetailBlend.channel(
-                    Color.blue(current),samplePlane(generated,u,v,2),
-                    samplePlane(shiftedGenerated,u,v-25f,2),weight)
-                val updated=Color.argb(Color.alpha(current),r,g,blue)
+                val updated=AttganDetailBlend.balancedPixel(
+                    current,
+                    samplePlane(generated,u,v,0),
+                    samplePlane(generated,u,v,1),
+                    samplePlane(generated,u,v,2),
+                    samplePlane(shiftedGenerated,u,v-25f,0),
+                    samplePlane(shiftedGenerated,u,v-25f,1),
+                    samplePlane(shiftedGenerated,u,v-25f,2),weight
+                )
                 if (updated!=current) { finalPixels[i]=updated;corrected++ }
             }
             android.util.Log.i("KeeperOfflineDetail","two-view correction pixels=$corrected")

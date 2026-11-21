@@ -38,17 +38,17 @@ class ManualRetouchGestureTest {
                 if(show) ManualRetouchEditor(source,ai,1f,false,null,{},{},{ output=it })
             } } }
             compose.waitUntil(5000) { output!=null }
-            compose.onNodeWithText("คืนต้นฉบับ").performClick()
+            compose.onNodeWithText("คืนภาพ").performClick()
             compose.onNodeWithTag("retouch-preview").performTouchInput { click(center) }
             compose.waitUntil(5000) { output?.getPixel(100,100)==Color.BLUE }
             compose.onNodeWithContentDescription("ย้อนกลับ").performClick()
             compose.waitUntil(5000) { output?.getPixel(100,100)==Color.RED }
             compose.onNodeWithContentDescription("ทำซ้ำ").performClick()
             compose.waitUntil(5000) { output?.getPixel(100,100)==Color.BLUE }
-            compose.onNodeWithText("ทารีทัช").performClick()
+            compose.onNodeWithTag("tool-paint").performClick()
             compose.onNodeWithTag("retouch-preview").performTouchInput { click(center) }
             compose.waitUntil(5000) { output?.getPixel(100,100)==Color.RED }
-            compose.onNodeWithText("กรอบใบหน้า").performClick()
+            compose.onNodeWithText("กรอบ").performClick()
             compose.onNodeWithTag("retouch-preview").performTouchInput {
                 swipe(center-Offset(width*.15f,height*.15f),center+Offset(width*.15f,height*.15f),300)
             }
@@ -56,7 +56,7 @@ class ManualRetouchGestureTest {
             assertEquals(Color.RED,output!!.getPixel(100,100))
             compose.onNodeWithContentDescription("ย้อนกลับ").performClick()
             compose.waitUntil(5000) { output?.getPixel(10,10)==Color.RED }
-            compose.onNodeWithText("ขยาย/เลื่อน").performClick()
+            compose.onNodeWithText("เลื่อน/ซูม").performClick()
             compose.onNodeWithTag("retouch-preview").performTouchInput {
                 pinch(center-Offset(35f,0f),center+Offset(35f,0f),center-Offset(100f,0f),center+Offset(100f,0f),300)
             }

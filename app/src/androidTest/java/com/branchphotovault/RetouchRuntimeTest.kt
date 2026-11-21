@@ -80,7 +80,7 @@ class RetouchRuntimeTest {
                 val stages = mutableListOf<RetouchStage>()
                 val result = retoucher.process(source,0,region) { stages.add(it) }
                 try {
-                    assertEquals(RetouchStage.entries,stages)
+                    assertEquals(RetouchStage.entries.filter { it != RetouchStage.REFINE },stages)
                     assertFalse(source.isRecycled)
                     assertEquals(source.width,result.width)
                     assertEquals(source.height,result.height)

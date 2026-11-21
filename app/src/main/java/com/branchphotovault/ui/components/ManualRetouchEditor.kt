@@ -34,7 +34,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.math.min
 import kotlin.math.max
 
-private enum class RetouchTool(val label: String) { PAN("เลื่อน/ซูม"), FRAME("กรอบ"), PAINT("ทาเพิ่ม"), RESTORE("คืนภาพ") }
+private enum class RetouchTool(val label: String) {
+    PAN("เลื่อน/ซูม"), HEAL("ซ่อมหนวด"), RESTORE("คืนภาพ"),
+    FRAME("กรอบ"), PAINT("ทา AI")
+}
 private data class EditSnapshot(val strokes: List<RetouchStroke> = emptyList(), val bounds: RetouchBounds? = null)
 
 @Composable
@@ -66,6 +69,8 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
     var tool by remember(source,generated) { mutableStateOf(RetouchTool.PAN) }
     var before by remember { mutableStateOf(false) }
     var radius by remember { mutableFloatStateOf(.035f) }
+    var donor by remember(source,generated) { mutableStateOf<RetouchPoint?>(null) }
+    var pickingSkin by remember(source,generated) { mutableStateOf(false) }
     val history=remember(source,generated) { mutableStateListOf(EditSnapshot()) }
     val redo=remember(source,generated) { mutableStateListOf<EditSnapshot>() }
     val edit=history.last()
@@ -85,6 +90,7 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
         redo.clear()
     }
     LaunchedEffect(tool) { edited(tool!=RetouchTool.PAN) }
+    LaunchedEffect(tool) { if(tool!=RetouchTool.HEAL) pickingSkin=false }
     DisposableEffect(Unit) { onDispose { edited(false) } }
     // Stage 1: prepare transparent edit pixels only when brush/frame changes.
     // This prevents full-resolution bitmap copies for every slider tick.
@@ -129,14 +135,15 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
     }
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
         ZoomableImageViewport(source,Modifier.fillMaxWidth().height(340.dp).testTag("retouch-preview"),
-            IntSize(source.width,source.height),onZoomChanged,state=zoom,gesturesEnabled=tool==RetouchTool.PAN) {
+            IntSize(source.width,source.height),onZoomChanged,state=zoom,
+            gesturesEnabled=true,singleFingerPan=tool==RetouchTool.PAN) {
             Image(source.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
             if(!before) previewLayer?.let { layer ->
                 Image(layer.asImageBitmap(),null,Modifier.fillMaxSize(),
                     alpha=strength.coerceIn(0f,1f),contentScale=ContentScale.Fit)
             }
             Canvas(Modifier.fillMaxSize().semantics { stateDescription=if(before) "Original" else "Edited" }
-                .pointerInput(tool,busy,rendering,radius,edit) {
+                .pointerInput(tool,busy,rendering,radius,edit,pickingSkin,donor) {
                     if(tool==RetouchTool.PAN || busy || rendering) return@pointerInput
                     val fit=min(size.width.toFloat()/source.width,size.height.toFloat()/source.height)
                     val width=source.width*fit; val height=source.height*fit
@@ -154,21 +161,33 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
                         try {
                             do {
                                 val event=awaitPointerEvent(PointerEventPass.Initial)
-                                if(event.changes.count { it.pressed }>1) cancelled=true
-                                event.changes.forEach { change ->
-                                    if(change.id==down.id && drag.size<1500) drag=drag+point(change.position)
+                                if(event.changes.count { it.pressed }>1) {
+                                    cancelled=true
+                                    drag=emptyList()
+                                }
+                                if(!cancelled) event.changes.forEach { change ->
+                                    if(change.id==down.id && drag.size<1500)
+                                        drag=drag+point(change.position)
                                     change.consume()
                                 }
                             } while(event.changes.any { it.pressed })
                         if(!cancelled && drag.isNotEmpty()) {
-                            if(tool==RetouchTool.FRAME) {
+                            if(tool==RetouchTool.HEAL && pickingSkin) {
+                                donor=drag.last()
+                                pickingSkin=false
+                                committed=true
+                            } else if(tool==RetouchTool.FRAME) {
                                 val a=drag.first(); val b=drag.last()
                                 if(kotlin.math.abs(a.x-b.x)>.02f && kotlin.math.abs(a.y-b.y)>.02f) {
                                     commit(edit.copy(bounds=RetouchBounds(min(a.x,b.x),min(a.y,b.y),max(a.x,b.x),max(a.y,b.y))))
                                     committed=true
                                 }
                             } else {
-                                commit(edit.copy(strokes=edit.strokes+RetouchStroke(drag,radius,tool==RetouchTool.RESTORE)))
+                                commit(edit.copy(strokes=edit.strokes+RetouchStroke(
+                                    drag,radius,tool==RetouchTool.RESTORE,
+                                    heal=tool==RetouchTool.HEAL,
+                                    donor=if(tool==RetouchTool.HEAL) donor else null
+                                )))
                                 committed=true
                             }
                         }
@@ -184,6 +203,10 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
                 val origin=Offset((size.width-width)/2,(size.height-height)/2)
                 fun pos(p: RetouchPoint)=origin+Offset(p.x*width,p.y*height)
                 val bounds=edit.bounds ?: if(tool==RetouchTool.FRAME || generated==null) detectedBounds else null
+                if(tool==RetouchTool.HEAL) donor?.let { sample ->
+                    drawCircle(Color(0xFFFFD16B),7.dp.toPx(),pos(sample),style=Stroke(2.dp.toPx()))
+                    drawCircle(Color(0xFFFFD16B),2.dp.toPx(),pos(sample))
+                }
                 bounds?.let {
                     drawRect(Color(0xFF39C8AE),origin+Offset(it.left*width,it.top*height),Size((it.right-it.left)*width,(it.bottom-it.top)*height),style=Stroke(2.dp.toPx()))
                 }
@@ -191,13 +214,22 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
                     if(tool==RetouchTool.FRAME) {
                         val a=pos(drag.first()); val b=pos(drag.last())
                         drawRect(Color.Yellow,Offset(min(a.x,b.x),min(a.y,b.y)),Size(kotlin.math.abs(b.x-a.x),kotlin.math.abs(b.y-a.y)),style=Stroke(2.dp.toPx()))
-                    } else drag.forEach { drawCircle(if(tool==RetouchTool.RESTORE) Color(0x55FF7272) else Color(0x5539C8AE),radius*min(width,height),pos(it)) }
+                    } else drag.forEach {
+                        drawCircle(
+                            if(tool==RetouchTool.RESTORE) Color(0x55FF7272)
+                            else if(tool==RetouchTool.HEAL && pickingSkin) Color(0xAAFFD16B)
+                            else Color(0x5539C8AE),
+                            if(tool==RetouchTool.HEAL && pickingSkin) 7.dp.toPx()
+                                else radius*min(width,height),pos(it)
+                        )
+                    }
                 }
             }
         }
         FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             RetouchTool.entries.forEach { option ->
-                FilterChip(selected=tool==option,enabled=!busy && (!rendering) && (option==RetouchTool.PAN || generated!=null),
+                FilterChip(modifier=Modifier.testTag("tool-"+option.name.lowercase()),
+                    selected=tool==option,enabled=!busy && (!rendering) && (option==RetouchTool.PAN || generated!=null),
                     onClick={ tool=option },label={ Text(option.label) })
             }
         }
@@ -208,10 +240,30 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
                 TextButton(enabled=!busy && !rendering && edit.bounds!=null,onClick={ commit(edit.copy(bounds=null)) }) { Text("ไม่จำกัดกรอบ") }
             }
         }
-        if(tool==RetouchTool.PAINT || tool==RetouchTool.RESTORE) {
-            Text("ขนาดแปรง ${(radius*200).toInt()}% • เลือกขยาย/เลื่อนเพื่อซูม",style=MaterialTheme.typography.bodySmall)
-            Slider(radius,{ radius=it },valueRange=.01f.. .12f,enabled=!busy && !rendering)
+        if(tool==RetouchTool.HEAL) {
+            Text("ซ่อมบริเวณที่ AI ลบไม่ถึงด้วยเนื้อผิวจริง ไม่เรียก AI ซ้ำ",
+                style=MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp),
+                verticalAlignment=Alignment.CenterVertically) {
+                FilterChip(selected=pickingSkin, enabled=!busy && !rendering,
+                    onClick={ pickingSkin=!pickingSkin },
+                    label={ Text(if(pickingSkin) "แตะผิวสะอาดบนภาพ…" else "เลือกผิวต้นแบบ") })
+                if(donor!=null) TextButton(enabled=!busy && !rendering,
+                    onClick={donor=null;pickingSkin=false}) { Text("เลือกอัตโนมัติ") }
+            }
+            Text(if(donor==null) "ไม่เลือกต้นแบบ: ระบบจะหาผิวใกล้เคียงให้อัตโนมัติ"
+                else "เลือกผิวต้นแบบแล้ว · ทาบริเวณหนวดที่ตกหล่นได้เลย",
+                style=MaterialTheme.typography.bodySmall)
         }
+        if(tool==RetouchTool.PAINT)
+            Text("ทาเพิ่มเฉพาะส่วนที่ AI เคยแก้ไข ถ้า AI พลาด ให้เลือก «ซ่อมหนวด»",
+                style=MaterialTheme.typography.bodySmall)
+        if(tool==RetouchTool.HEAL || tool==RetouchTool.PAINT || tool==RetouchTool.RESTORE) {
+            Text("ขนาดแปรง " + (radius*200).toInt() + "%",style=MaterialTheme.typography.bodySmall)
+            Slider(radius,{ radius=it },valueRange=.008f.. .10f,enabled=!busy && !rendering)
+        }
+        Text("ใช้ 1 นิ้วทา/วาด • ใช้ 2 นิ้วเลื่อนและซูมขณะใช้ทุกเครื่องมือได้",
+            style=MaterialTheme.typography.bodySmall)
         Row(verticalAlignment=Alignment.CenterVertically) {
             IconButton(enabled=!busy && !rendering && history.size>1,onClick={ report(null); redo.add(history.removeAt(history.lastIndex)) }) { Icon(Icons.Outlined.Undo,"ย้อนกลับ") }
             IconButton(enabled=!busy && !rendering && redo.isNotEmpty(),onClick={ report(null); history.add(redo.removeAt(redo.lastIndex)) }) { Icon(Icons.Outlined.Redo,"ทำซ้ำ") }
@@ -220,6 +272,6 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
         }
         if(rendering) LinearProgressIndicator(Modifier.fillMaxWidth())
         renderError?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-        if(tool==RetouchTool.PAINT) Text("ทากลับได้เฉพาะบริเวณที่ AI สร้างผลรีทัชไว้",style=MaterialTheme.typography.bodySmall)
+
     }
 }

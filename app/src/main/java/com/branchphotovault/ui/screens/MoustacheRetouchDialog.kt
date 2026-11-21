@@ -46,6 +46,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     // AttGAN remains the verified offline quality baseline. Extra detail is
     // optional, preserving the original single-pass result for comparison.
     var extraDetail by remember { mutableStateOf(false) }
+    var extraDetailStrength by remember { mutableFloatStateOf(.28f) }
     var busy by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
@@ -95,7 +96,8 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                         MoustacheRetoucher(context).process(
                             source,face,region,RetouchEngine.BASELINE,
                             onProgress={stage -> scope.launch {message=stage.message}},
-                            extraDetail=extraDetail
+                            extraDetail=extraDetail,
+                            extraDetailStrength=extraDetailStrength
                         )
                     }
                     result=processed
@@ -155,7 +157,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text("เก็บหนวดตกหล่นเพิ่มเติม",style=MaterialTheme.typography.bodyMedium)
-                        Text("ทดลองประมวลผลใบหน้าอีกมุมหนึ่ง · ใช้เวลานานขึ้น " +
+                        Text("ทดลองเก็บเฉพาะเส้นขนสีเข้ม · ใช้เวลานานขึ้น " +
                             "และอาจเหมาะกับภาพบางประเภทเท่านั้น",
                             style=MaterialTheme.typography.bodySmall)
                     }
@@ -164,6 +166,18 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                         message=if(it) "โหมดเก็บรายละเอียด 2 มุมมอง (ทดลอง)" else
                             "AttGAN รอบเดียว (ผลอ้างอิง)"
                     })
+                }
+                if(extraDetail) {
+                    Text("ความแรงเก็บรายละเอียด " + (extraDetailStrength*100).toInt() + "%" +
+                        " · เน้นคงสีผิว AttGAN เดิม",style=MaterialTheme.typography.bodySmall)
+                    Slider(value=extraDetailStrength,
+                        onValueChange={
+                            extraDetailStrength=it
+                            result=null
+                            composite=null
+                        },
+                        valueRange=.10f.. .60f,
+                        enabled=!busy)
                 }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (faceCount > 1) Row {

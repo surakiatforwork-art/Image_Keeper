@@ -83,3 +83,5 @@ portrait without introducing edge/texture concerns.
 
 
 OFFLINE BETA 1.4.0-beta.18: facial hair retouch uses the bundled AttGAN on device. The old AILabTools cloud beard removal API mode is removed. Optional experimental second-view processing uses a second pass of that same on-device model, with an inward feather and jawline protection; it is disabled by default.
+
+OFFLINE BETA 1.4.0-beta.19: local AttGAN second-view texture gate and luminance-only limited brightness. Added a separate user-guided local-skin healing brush for residual hair without cloud/API.
