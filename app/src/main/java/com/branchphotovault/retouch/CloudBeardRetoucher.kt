@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -90,30 +91,86 @@ internal class CloudBeardRetoucher(private val context: Context) {
         crop:Rect,
         face:List<NormalizedLandmark>
     ): Bitmap {
-        val wantedRatio=crop.width().toFloat()/crop.height()
-        val returnedRatio=remote.width.toFloat()/remote.height
-        require(abs(returnedRatio/wantedRatio-1f)<.035f) {
-            "Cloud เปลี่ยนสัดส่วนภาพมากเกินไป จึงไม่สามารถเกลี่ยกลับได้อย่างปลอดภัย"
+        // AILabTools can generate a square or differently framed result even
+        // when its input was portrait. That is valid and should not by itself
+        // cause an error. Never resize this output non-uniformly to fit crop.
+        // Instead, register the remote face to the *original* source landmarks
+        // with an isotropic similarity transform and validate the residual.
+        val reporter = MoustacheRetoucher(context)
+        val candidates = reporter.faces(remote)
+        require(candidates.isNotEmpty()) {
+            "ภาพ Cloud ไม่พบใบหน้า จึงไม่สามารถจัดแนวกับต้นฉบับได้"
         }
-        val corrected = Bitmap.createScaledBitmap(remote,crop.width(),crop.height(),true)
+        // Left/right outer eye corners, nose bridge, nose tip and mouth
+        // corners are relatively stable after beard-only editing.
+        val anchors = intArrayOf(33, 263, 168, 1, 61, 291, 6)
+        val target = anchors.map { i ->
+            CloudFaceAlignment.Point(
+                face[i].x().toDouble()*source.width - crop.left,
+                face[i].y().toDouble()*source.height - crop.top
+            )
+        }
+        val choice = candidates.mapNotNull { candidate ->
+            try {
+                val remotePoints = anchors.map { i ->
+                    CloudFaceAlignment.Point(
+                        candidate[i].x().toDouble()*remote.width,
+                        candidate[i].y().toDouble()*remote.height
+                    )
+                }
+                val transform = CloudFaceAlignment.fit(remotePoints,target)
+                Pair(transform,candidate)
+            } catch (_:IllegalArgumentException) { null }
+        }.minByOrNull { it.first.meanResidual }
+            ?: throw IllegalStateException("Cloud ไม่สามารถจัดตำแหน่งใบหน้าได้")
+
+        val fit = choice.first
+        val matchedFace = choice.second
+        val width = kotlin.math.hypot(
+            (face[263].x()-face[33].x())*source.width,
+            (face[263].y()-face[33].y())*source.height
+        ).coerceAtLeast(40f)
+        require(fit.meanResidual <= width*.065 && fit.worstResidual <= width*.18) {
+            "Cloud เปลี่ยนตำแหน่งตา จมูก หรือปากมากเกินไป จึงไม่แก้ภาพต้นฉบับ"
+        }
+        // Avoid accepting an output that retains eye locations but changes
+        // face proportions radically. This compares geometry, not the
+        // absolute output canvas aspect ratio.
+        fun point(i:Int):CloudFaceAlignment.Point = fit.map(
+            CloudFaceAlignment.Point(
+                matchedFace[i].x().toDouble()*remote.width,
+                matchedFace[i].y().toDouble()*remote.height
+            )
+        )
+        val oldMouth=kotlin.math.hypot(
+            (face[291].x()-face[61].x())*source.width,
+            (face[291].y()-face[61].y())*source.height
+        ).coerceAtLeast(8f)
+        val newMouth=kotlin.math.hypot(
+            point(291).x-point(61).x,point(291).y-point(61).y
+        )
+        require(kotlin.math.abs(newMouth / oldMouth - 1.0) < .29) {
+            "Cloud เปลี่ยนสัดส่วนปากมากเกินไป ไม่ใช้ภาพนี้"
+        }
+        val corrected = Bitmap.createBitmap(
+            crop.width(),crop.height(),Bitmap.Config.ARGB_8888
+        )
         try {
-            val reported = MoustacheRetoucher(context).faces(corrected).firstOrNull()
-                ?: throw IllegalStateException("Cloud เปลี่ยนภาพจนตรวจใบหน้าไม่ได้")
-            val faceWidth = max(50f,abs((face[454].x()-face[234].x())*source.width))
-            fun dx(i:Int)= abs((reported[i].x()*crop.width()+crop.left) - face[i].x()*source.width)
-            fun dy(i:Int)= abs((reported[i].y()*crop.height()+crop.top) - face[i].y()*source.height)
-            // Guard identity geometry. The cloud may remove hair but may not
-            // move eyes, nose or lip center or recompose the photograph.
-            val anchors=intArrayOf(33,263,1,61,291)
-            val displacement=anchors.map { hypot(dx(it),dy(it)) }.sorted()
-            val median=displacement[displacement.size/2]
-            val worst=displacement.last()
-            require(median<faceWidth*.045f && worst<faceWidth*.11f) {
-                "Cloud เปลี่ยนตำแหน่งใบหน้าหรือปากมากเกินไป ระบบไม่ยอมใช้ภาพนี้"
+            val transform = Matrix().apply {
+                setValues(floatArrayOf(
+                    fit.a.toFloat(), -fit.b.toFloat(), fit.tx.toFloat(),
+                    fit.b.toFloat(), fit.a.toFloat(), fit.ty.toFloat(),
+                    0f,0f,1f
+                ))
             }
+            Canvas(corrected).drawBitmap(remote,transform,
+                Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+            Log.i("KeeperCloudBeard",
+                "Cloud aligned ${remote.width}x${remote.height} -> ${crop.width()}x${crop.height()}, " +
+                    "landmarkResidual=${fit.meanResidual.toInt()}px; no forced aspect stretch")
             return corrected
         } catch (e:Exception) {
-            if(corrected !== remote) corrected.recycle()
+            corrected.recycle()
             throw e
         }
     }
@@ -207,7 +264,12 @@ internal class CloudBeardRetoucher(private val context: Context) {
                 if(alpha<=0f) continue
                 val old=changed[idx]
                 val new=remotePixels[cropIdx]
-                fun lerp(c0:Int,c1:Int):Int=(c0+(c1-c0)*alpha).roundToInt().coerceIn(0,255)
+                // A transformed source may have transparent corners. Never
+                // composite those as black on the original photograph.
+                val coverage=Color.alpha(new)/255f
+                if(coverage<=0f) continue
+                val safeAlpha=alpha*coverage
+                fun lerp(c0:Int,c1:Int):Int=(c0+(c1-c0)*safeAlpha).roundToInt().coerceIn(0,255)
                 changed[idx]=Color.argb(Color.alpha(old),
                     lerp(Color.red(old),Color.red(new)),
                     lerp(Color.green(old),Color.green(new)),
