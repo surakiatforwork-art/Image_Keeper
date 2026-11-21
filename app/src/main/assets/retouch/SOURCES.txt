@@ -44,3 +44,41 @@ it is not an LLM or a general-purpose reasoning agent.
 Face alignment, cheek colour selection, conditional left/right illumination
 matching, bounded Lab correction, texture recovery and inward feathering run locally.
 The app keeps original photos and saves edits as separate copies.
+
+
+SMART SHAVE V4 — RESEARCH-ONLY FACIAL-HAIR SEGMENTATION (2026-11-20)
+--------------------------------------------------------------------------------
+Model: beard-mobile-224.onnx, a locally trained 3,218,138-param
+MobileNetV3-Large LR-ASPP beard (binary) semantic segmentation model.
+Backbone: torchvision MobileNet_V3_Large_Weights.IMAGENET1K_V2,
+official torchvision weights from PyTorch.
+Training script and logs:
+research/model_candidates/train_beard_mobile.py
+research/model_candidates/train_beard_mobile.log
+Training data: 675 train + 70 validation polygon-annotated photos
+from the project https://github.com/prashants975/Beard-Hair-Image-Segmentation.
+We transformed class 0 "beard" polygons to binary masks and treated other
+pixels, including scalp hair class 1, as non-beard.
+Repository code license: MIT; see Beard-YOLO-LICENSE.txt.
+Note: underlying PHOTOGRAPH rights, annotation provenance and original
+dataset terms have not been independently verified. The MIT license of the
+repository cannot by itself license third-party photographs.
+This model is therefore included only in a PRIVATE RESEARCH/TEST BUILD.
+Before distributing APKs to end users or offering commercial services,
+audit all data/weight licenses and substitute fully licensed training data
+and retrain if required.
+Training: 7 epochs, 224x224, best binary pixel Dice = 0.6978 on 70
+validation images. This figure is NOT a guarantee of detection quality on
+unseen people, faint stubble, facial poses or lighting conditions.
+ONNX SHA-256: A8CC1FE93039EDEA14FBD9353A1AF9591A9A6964C3B8333E230F839E4C89302C
+No Meitu weights, native library or private API is used in this feature.
+Photo editing remains local and original gallery files remain unchanged.
+The mask can be inspected in the experimental UI. Dense mask donor filling
+is explicitly suppressed to avoid flat skin patches and jaw loss.
+
+LaMa and the 45.9M-parameter YOLOv8 source checkpoints were evaluated
+independently in research/model_candidates and were NOT included in the APK.
+The LaMa experiment did not convincingly remove heavy beard on the tested
+portrait without introducing edge/texture concerns.
+
+CLOUD AI BETA 1.4.0-beta.16: public APK includes licensed local AttGAN and face parser, but does NOT bundle experimental beard-mobile-224.onnx (dataset provenance pending review). Cloud provider is AILabTools, called only after opt-in with user's own API key. Cloud result quality has not been independently confirmed against Meitu yet.

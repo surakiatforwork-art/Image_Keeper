@@ -15,6 +15,18 @@ enum class RetouchRegion(val label: String) {
     MOUSTACHE("หนวด"), BEARD("เครา"), BOTH("หนวดและเครา")
 }
 
+/** Both engines retain the licensed local AttGAN model. The V2 path is an
+ * independent hair-aware mask/compositing experiment, not a Meitu model. */
+enum class RetouchEngine(val label: String) {
+    SMART_V4("Smart Shave V4.1 · AI ตรวจหนวด"),
+    MASK_INSPECT("V3 · ตรวจแผนที่ Mask"),
+    HYBRID_BASELINE("V2.3 · หนวด AttGAN + ผิว V2.1"),
+    MOUSTACHE_FOCUS("V2.2 · เน้นเก็บหนวด (ทดลอง)"),
+    RESIDUAL_REPAIR("V2.1 · เก็บหนวดตกหล่น (ทดลอง)"),
+    HAIR_AWARE("V2 · เงาปลอดภัย"),
+    BASELINE("AttGAN รอบเดียว")
+}
+
 /** Offline AttGAN compositing. The caller's bitmap and original file are never modified. */
 class MoustacheRetoucher(private val context: Context) {
     fun faces(bitmap: Bitmap): List<List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>> {
@@ -28,7 +40,10 @@ class MoustacheRetoucher(private val context: Context) {
     }
 
     fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH,
-        onProgress: (RetouchStage) -> Unit = {}): Bitmap = synchronized(lock) {
+        engine: RetouchEngine = RetouchEngine.BASELINE,
+        onDiagnostics: ((Bitmap, HairMaskDiagnostics.Stats) -> Unit)? = null,
+        onProgress: (RetouchStage) -> Unit = {}
+    ): Bitmap = synchronized(lock) {
         onProgress(RetouchStage.LOCATE)
         val face = faces(bitmap).getOrNull(faceIndex) ?: error("ไม่พบใบหน้า กรุณาเลือกภาพที่เห็นใบหน้าชัดเจน")
         val width = bitmap.width
@@ -92,14 +107,89 @@ class MoustacheRetoucher(private val context: Context) {
             canvas.drawPath(protected,paint)
             mask.getPixels(maskPixels,0,width,0,0,width,height)
         } finally { mask.recycle() }
+        // The previously trained 19-class face parser cannot segment facial
+        // hair. V4 adds an independently trained, two-class beard/hair model
+        // and only EXPANDS the editable mask for high-confidence BEARD pixels
+        // inside anatomically limited, protected face-and-upper-neck zones.
+        val anatomy = if(engine == RetouchEngine.SMART_V4)
+            FacialHairAnatomy(face,width,height,a,b,tx,ty,region) else null
+        // Independently preserve the face silhouette, even when a beard model
+        // detects dark facial hair along the chin and neck boundary.
+        val jawGuard = if(engine == RetouchEngine.SMART_V4)
+            JawlineIntegrityGuard.fromLandmarks(face,width,height,a,b,tx,ty) else null
+        val protectedRegion = Region().apply {
+            setPath(protected,Region(0,0,width,height))
+        }
+        val learnedBeard = if(engine == RetouchEngine.SMART_V4) {
+            try {
+                val model=BeardSegmentationTool(context).analyse(bitmap,face)
+                android.util.Log.i("KeeperRetouchV4",
+                    "learned model detections=${model.detections}, max=${model.strongestScore}, area=${model.coverage()}")
+                model
+            } catch(error:Exception) {
+                android.util.Log.e("KeeperRetouchV4",
+                    "Neural beard segmentation unavailable; falling back to V2.3",error)
+                null
+            }
+        } else null
+        val oldEditableMask=if(engine == RetouchEngine.SMART_V4 && onDiagnostics != null)
+            BooleanArray(maskPixels.size) { i ->
+                maskPixels[i] != 0 && FaceParsingResult.allowsRetouch(labelAt(i%width,i/width))
+            } else null
         var editablePixels = 0
-        for (i in maskPixels.indices) {
-            if (Color.alpha(maskPixels[i]) == 0) continue
-            if (!FaceParsingResult.allowsRetouch(labelAt(i%width,i/width))) maskPixels[i] = 0
-            else editablePixels++
+        var expandedPixels = 0
+        for(i in maskPixels.indices) {
+            val x=i%width; val y=i/width
+            val label=labelAt(x,y)
+            val jawAllowed=jawGuard?.weightAt(x,y)?.let {it>.001f} ?: true
+            val oldAllowed=jawAllowed && Color.alpha(maskPixels[i])!=0 &&
+                FaceParsingResult.allowsRetouch(label)
+            val expanded = if (jawAllowed && learnedBeard != null &&
+                anatomy?.maskZone(x,y)==true &&
+                !protectedRegion.contains(x,y)) {
+                val confidence=learnedBeard.at(x,y)
+                confidence>.20f && (FaceParsingResult.allowsRetouch(label) ||
+                    (label==0 && confidence>.68f))
+            } else false
+            if(oldAllowed || expanded) {
+                if(expanded && !oldAllowed) expandedPixels++
+                maskPixels[i]=Color.WHITE
+                editablePixels++
+            } else maskPixels[i]=Color.TRANSPARENT
+        }
+        if(engine == RetouchEngine.SMART_V4) {
+            android.util.Log.i("KeeperRetouchV4","expanded mask pixels=$expandedPixels")
+            if(onDiagnostics != null && learnedBeard != null) {
+                val (preview,stats)=NeuralBeardPreview.render(
+                    bitmap,learnedBeard,
+                    permitted={x,y -> maskPixels[y*width+x]!=0 &&
+                        anatomy?.maskZone(x,y)==true &&
+                        !protectedRegion.contains(x,y)},
+                    oldEditable={x,y -> oldEditableMask?.get(y*width+x)==true}
+                )
+                onDiagnostics(preview,stats)
+            }
         }
         require(editablePixels >= max(25,(span*span*.05f).toInt())) {
             "AI แยกพื้นที่ผิวไม่ชัดเจน กรุณาลองภาพที่เห็นใบหน้าชัดกว่าเดิม"
+        }
+        if(engine == RetouchEngine.MASK_INSPECT && onDiagnostics != null) {
+            val upper=p(13); val chin=p(152)
+            fun mappedX(q:PointF) = a*q.x+b*q.y+tx
+            fun mappedY(q:PointF) = -b*q.x+a*q.y+ty
+            // Diagnostic zone deliberately extends beyond existing beard mask:
+            // orange pixels make clipped sideburns/neck candidates visible.
+            val (map,stats)=HairMaskDiagnostics.render(
+                original,width,height,
+                editable={x,y -> maskPixels[y*width+x] != 0},
+                normalized={x,y -> Pair(a*x+b*y+tx,-b*x+a*y+ty)},
+                upperLip=mappedY(upper),chin=mappedY(chin),
+                left=min(mappedX(p(234)),mappedX(p(61))),
+                right=max(mappedX(p(454)),mappedX(p(291)))
+            )
+            android.util.Log.i("KeeperMaskV3",
+                "candidate_inside=${stats.accepted}, outside=${stats.excluded}, editable=${stats.editable}")
+            onDiagnostics(map,stats)
         }
         onProgress(RetouchStage.GENERATE)
         // Close each native session before starting the next to keep peak memory bounded.
@@ -126,6 +216,9 @@ class MoustacheRetoucher(private val context: Context) {
         val offsets = Array(3) { mutableListOf<Float>() }
         val leftOffsets = Array(3) { mutableListOf<Float>() }
         val rightOffsets = Array(3) { mutableListOf<Float>() }
+        val leftCleanSkin = Array(3) { mutableListOf<Float>() }
+        val rightCleanSkin = Array(3) { mutableListOf<Float>() }
+        val globalCleanSkin = Array(3) { mutableListOf<Float>() }
         val radius = max(3,(span*.12f).toInt())
         val samples = HashSet<Int>()
         for (center in listOf(50,280,205,425).map(::p)) {
@@ -139,11 +232,20 @@ class MoustacheRetoucher(private val context: Context) {
             val x = i%width; val y = i/width; val source = original[i]
             val first = rgbToLab(Color.red(source).toFloat(),Color.green(source).toFloat(),Color.blue(source).toFloat())
             val second = rgbToLab(generatedAt(x,y,0).toInt().toFloat(),generatedAt(x,y,1).toInt().toFloat(),generatedAt(x,y,2).toInt().toFloat())
-            val side = if (a*x+b*y+tx < 128) leftOffsets else rightOffsets
+            val onLeft=a*x+b*y+tx < 128
+            val side = if (onLeft) leftOffsets else rightOffsets
+            val reliablySkin = engine == RetouchEngine.SMART_V4 &&
+                (learnedBeard?.at(x,y) ?: 1f)<.12f &&
+                (jawGuard?.weightAt(x,y) ?: 0f)>.98f
+            val skinSide = if(onLeft) leftCleanSkin else rightCleanSkin
             for (c in 0..2) {
                 val difference = first[c]-second[c]
                 offsets[c].add(difference)
                 side[c].add(difference)
+                if(reliablySkin) {
+                    globalCleanSkin[c].add(first[c])
+                    skinSide[c].add(first[c])
+                }
             }
         }
         val offset = FloatArray(3) { c -> offsets[c].sorted().let { (it[(it.size-1)/2]+it[it.size/2])/2 } }
@@ -154,7 +256,70 @@ class MoustacheRetoucher(private val context: Context) {
         val leftOffset = sideMedian(leftOffsets)
         val rightOffset = sideMedian(rightOffsets)
         val unevenLight = abs(leftOffset[0]-rightOffset[0]) > 4f
+        fun medianSkin(values: Array<MutableList<Float>>): FloatArray? =
+            if(values[0].size >= 24) FloatArray(3) { c ->
+                values[c].sorted().let { (it[(it.size-1)/2]+it[it.size/2])/2f }
+            } else null
+        val allSkinReference=medianSkin(globalCleanSkin)
+        val leftSkinReference=medianSkin(leftCleanSkin) ?: allSkinReference
+        val rightSkinReference=medianSkin(rightCleanSkin) ?: allSkinReference
+        if(engine == RetouchEngine.SMART_V4) {
+            android.util.Log.i("KeeperSkinGuard",
+                "clean skin donors left=${leftCleanSkin[0].size}, right=${rightCleanSkin[0].size}")
+        }
+
         onProgress(RetouchStage.TEXTURE)
+        // Meitu's APK identifies a dedicated beard category and supplies a face
+        // ROI to its AIGC service. We keep the image completely offline and use
+        // our own hair-versus-shadow confidence mask inside the existing,
+        // anatomy-protected ROI. The single-pass baseline is untouched.
+        val hairGuard = if (engine != RetouchEngine.BASELINE)
+            FacialHairRegionGuard(original, width, height, span) else null
+        // Face-aligned upper-lip ROI, independent of camera rotation and face
+        // location. Face-parsing and the protected lip/nose polygons remain
+        // mandatory; this never enlarges the editable anatomical mask.
+        val mouthLeft = p(61); val mouthRight = p(291)
+        val nose = p(2); val upperLip = p(13)
+        fun alignedX(q: PointF) = a*q.x+b*q.y+tx
+        fun alignedY(q: PointF) = -b*q.x+a*q.y+ty
+        val mouthU0 = min(alignedX(mouthLeft),alignedX(mouthRight))
+        val mouthU1 = max(alignedX(mouthLeft),alignedX(mouthRight))
+        val noseV = alignedY(nose)
+        val lipV = alignedY(upperLip)
+        fun inMoustache(x:Int,y:Int): Boolean {
+            val u=a*x+b*y+tx
+            val v=-b*x+a*y+ty
+            val pad=(mouthU1-mouthU0)*.12f
+            val top=min(noseV,lipV); val bottom=max(noseV,lipV)
+            return u in (mouthU0-pad)..(mouthU1+pad) &&
+                v in (top+2f)..(bottom-2f)
+        }
+        // V2.3: verified pure AttGAN removes more moustache than V2.1.
+        // Use exactly its compositing coefficient in the middle of the
+        // upper-lip ROI, fading smoothly into V2.1 around the boundary.
+        // This is deliberately not another heuristic hair detector.
+        fun baselineMoustacheWeight(x:Int,y:Int): Float {
+            if (region == RetouchRegion.BEARD) return 0f
+            val u=a*x+b*y+tx
+            val v=-b*x+a*y+ty
+            val mouthWidth=mouthU1-mouthU0
+            val top=min(noseV,lipV)
+            val bottom=max(noseV,lipV)
+            if (mouthWidth <= 2f || bottom-top <= 3f) return 0f
+            val pad=mouthWidth*.10f
+            val l=mouthU0-pad
+            val r=mouthU1+pad
+            val verticalMargin=(bottom-top)*.16f
+            val h=(bottom-top)
+            // No changes in nose and actual lip; the native anatomical mask
+            // continues to protect these regions independently.
+            val wx=min((u-l)/(mouthWidth*.15f),(r-u)/(mouthWidth*.15f))
+                .coerceIn(0f,1f)
+            val wy=min((v-top)/max(1f,verticalMargin),
+                (bottom-v)/max(1f,verticalMargin)).coerceIn(0f,1f)
+            val t=(wx*wy).coerceIn(0f,1f)
+            return t*t*(3f-2f*t)
+        }
         val output = original.copyOf()
         for (i in output.indices) {
             if (distance[i] <= 0f) continue
@@ -164,9 +329,42 @@ class MoustacheRetoucher(private val context: Context) {
             val localOffset = FloatArray(3) { c -> if (unevenLight) leftOffset[c]*(1-sideMix)+rightOffset[c]*sideMix else offset[c] }
             val source = original[i]
             val sourceLab = rgbToLab(Color.red(source).toFloat(),Color.green(source).toFloat(),Color.blue(source).toFloat())
-            val guarded = SkinToneGuard.apply(sourceLab,FloatArray(3) { c -> lab[c]+localOffset[c] })
+            val modelHairP=if(learnedBeard!=null && anatomy?.maskZone(x,y)==true)
+                learnedBeard.at(x,y) else 0f
+            val proposedLab=FloatArray(3) { c -> lab[c]+localOffset[c] }
+            val reference = if(leftSkinReference != null && rightSkinReference != null)
+                FloatArray(3) { c ->
+                    leftSkinReference[c]*(1-sideMix)+rightSkinReference[c]*sideMix
+                } else leftSkinReference ?: rightSkinReference
+            val guarded=if(engine == RetouchEngine.SMART_V4)
+                SkinColorContinuityGuard.harmonize(
+                    sourceLab,proposedLab,reference,modelHairP,
+                    jawGuard?.weightAt(x,y) ?: 1f)
+            else SkinToneGuard.apply(sourceLab,proposedLab)
             val matched = labToRgb(guarded[0],guarded[1],guarded[2])
-            val alpha = (distance[i]/max(2f,span*.055f)).coerceIn(0f,1f)
+            val feather = (distance[i]/max(2f,span*.055f)).coerceIn(0f,1f)
+            val label = if (hairGuard == null) 1 else labelAt(x,y)
+            val confidence = when {
+                hairGuard == null -> 1f
+                engine == RetouchEngine.SMART_V4 -> {
+                    val safe=hairGuard.confidence(x,y,label,source,matched)
+                    val beardBoost=((modelHairP-.16f)/.36f).coerceIn(0f,1f)
+                    val focus=baselineMoustacheWeight(x,y)
+                    safe+(1f-safe)*max(beardBoost,focus)
+                }
+                (engine == RetouchEngine.HYBRID_BASELINE ||
+                    engine == RetouchEngine.MASK_INSPECT) -> {
+                    val safe=hairGuard.confidence(x,y,label,source,matched)
+                    val focus=baselineMoustacheWeight(x,y)
+                    safe+(1f-safe)*focus
+                }
+                engine == RetouchEngine.MOUSTACHE_FOCUS && inMoustache(x,y) ->
+                    hairGuard.moustacheConfidence(x,y,label,source,matched)
+                else -> hairGuard.confidence(x,y,label,source,matched)
+            }
+            // Learned-beard confidence alone must not modify the jaw contour.
+            val alpha = feather*confidence*(jawGuard?.weightAt(x,y) ?: 1f)
+            if (alpha <= 0f) continue
             val channels = IntArray(3) { c ->
                 val value = channel(source,c).toFloat()
                 var average = 0f
@@ -177,9 +375,86 @@ class MoustacheRetoucher(private val context: Context) {
             }
             output[i] = Color.rgb(channels[0],channels[1],channels[2])
         }
+        // V2.1 is deliberately distinct from V2. Keep the smoothing/shadow
+        // result intact, then repair only clear residual dark strands.
+        val finalPixels = if (engine == RetouchEngine.RESIDUAL_REPAIR ||
+            engine == RetouchEngine.MOUSTACHE_FOCUS ||
+            engine == RetouchEngine.HYBRID_BASELINE ||
+            engine == RetouchEngine.MASK_INSPECT ||
+            engine == RetouchEngine.SMART_V4) {
+            onProgress(RetouchStage.REFINE)
+            val minInset = max(2f, span*.025f)
+            val (refined, stats) = ResidualHairRepair.refine(
+                original, output, width, height, span
+            ) { x, y ->
+                val i = y*width+x
+                distance[i] >= minInset && maskPixels[i] != 0 &&
+                    labelAt(x,y) == 1
+            }
+            android.util.Log.i("KeeperRetouch", "V2.1 residual candidates=${stats.candidates}, corrected=${stats.corrected}")
+            if (engine == RetouchEngine.MOUSTACHE_FOCUS) {
+                // Extra second-scale repair ONLY between nose and upper lip.
+                // The beard/chin result stays exactly as V2.1 produced it.
+                val (focused, detail) = ResidualHairRepair.refine(
+                    original, refined, width, height, span, radiusScale=1.7f,
+                    strengthScale=1.15f
+                ) { x, y ->
+                    val i=y*width+x
+                    distance[i] >= minInset && maskPixels[i] != 0 &&
+                        inMoustache(x,y) &&
+                        (labelAt(x,y) == 1 || labelAt(x,y) == 17)
+                }
+                // Keep the accurate anatomical/face-aligned ROI for focus.
+                android.util.Log.i("KeeperRetouch",
+                    "V2.2 focus candidates=${detail.candidates}, corrected=${detail.corrected}")
+                focused
+            } else if(engine == RetouchEngine.SMART_V4 &&
+                learnedBeard != null && learnedBeard.detections > 0) {
+                val (reconstructed, repair)=NeuralHairReconstruction.refine(
+                    original,refined,width,height,learnedBeard,
+                    permitted={x,y ->
+                        val i=y*width+x
+                        maskPixels[i]!=0 && distance[i]>max(2f,span*.017f) &&
+                            anatomy?.maskZone(x,y)==true &&
+                            (jawGuard?.weightAt(x,y) ?: 1f) >= .95f &&
+                            !protectedRegion.contains(x,y)
+                    },
+                    isNeck={x,y -> anatomy?.isNeck(x,y)==true}
+                )
+                android.util.Log.i("KeeperRetouchV4",
+                    "reconstructed=${repair.pixels} donor_cells=${repair.filledCells} skipped_cells=${repair.skippedCells}")
+                reconstructed
+            } else refined
+        } else output
+        // Final, separate gate covers every postprocess, including residual
+        // repair. It restores the ORIGINAL below the jaw and fades above it.
+        if(jawGuard != null) {
+            var fullyProtected=0
+            var softened=0
+            for(i in finalPixels.indices) {
+                val after=finalPixels[i]
+                if(after==original[i]) continue
+                val f=jawGuard.weightAt(i%width,i/width)
+                if(f<=.001f) {
+                    finalPixels[i]=original[i]
+                    fullyProtected++
+                } else if(f<.999f) {
+                    val before=original[i]
+                    fun merge(a:Int,b:Int):Int =
+                        (a*(1f-f)+b*f).roundToInt().coerceIn(0,255)
+                    finalPixels[i]=Color.rgb(
+                        merge(Color.red(before),Color.red(after)),
+                        merge(Color.green(before),Color.green(after)),
+                        merge(Color.blue(before),Color.blue(after)))
+                    softened++
+                }
+            }
+            android.util.Log.i("KeeperJawGuard",
+                "restored original pixels=$fullyProtected, feathered=$softened")
+        }
         onProgress(RetouchStage.VERIFY)
-        check(output.indices.all { Color.alpha(maskPixels[it]) != 0 || output[it] == original[it] })
-        Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888).apply { setPixels(output,0,width,0,0,width,height) }
+        check(finalPixels.indices.all { Color.alpha(maskPixels[it]) != 0 || finalPixels[it] == original[it] })
+        Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888).apply { setPixels(finalPixels,0,width,0,0,width,height) }
     }
 
     private fun runModel(input: FloatArray): FloatArray {

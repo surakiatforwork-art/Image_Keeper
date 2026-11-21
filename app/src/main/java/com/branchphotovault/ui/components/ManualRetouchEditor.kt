@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.branchphotovault.retouch.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -32,7 +34,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.math.min
 import kotlin.math.max
 
-private enum class RetouchTool(val label: String) { PAN("ขยาย/เลื่อน"), FRAME("กรอบใบหน้า"), PAINT("ทารีทัช"), RESTORE("คืนต้นฉบับ") }
+private enum class RetouchTool(val label: String) { PAN("เลื่อน/ซูม"), FRAME("กรอบ"), PAINT("ทาเพิ่ม"), RESTORE("คืนภาพ") }
 private data class EditSnapshot(val strokes: List<RetouchStroke> = emptyList(), val bounds: RetouchBounds? = null)
 
 @Composable
@@ -68,6 +70,7 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
     val redo=remember(source,generated) { mutableStateListOf<EditSnapshot>() }
     val edit=history.last()
     var rendered by remember(source,generated) { mutableStateOf<Bitmap?>(null) }
+    var previewLayer by remember(source,generated) { mutableStateOf<Bitmap?>(null) }
     var rendering by remember { mutableStateOf(false) }
     var renderError by remember { mutableStateOf<String?>(null) }
     var drag by remember { mutableStateOf<List<RetouchPoint>>(emptyList()) }
@@ -83,31 +86,55 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
     }
     LaunchedEffect(tool) { edited(tool!=RetouchTool.PAN) }
     DisposableEffect(Unit) { onDispose { edited(false) } }
-    LaunchedEffect(source,generated,edit,strength) {
+    // Stage 1: prepare transparent edit pixels only when brush/frame changes.
+    // This prevents full-resolution bitmap copies for every slider tick.
+    LaunchedEffect(source,generated,edit) {
         report(null)
         rendered=null
+        previewLayer=null
         renderError=null
         if(generated==null) return@LaunchedEffect
         rendering=true
-        var pending: Bitmap?=null
+        try {
+            val prepared=withContext(Dispatchers.Default) {
+                ManualRetouch.prepareLayer(generated,edit.strokes,edit.bounds)
+            }
+            previewLayer=prepared
+        } catch(cancelled: CancellationException) { throw cancelled }
+        catch(_: Exception) { renderError="เตรียมภาพรีทัชไม่สำเร็จ" }
+        finally { rendering=false }
+    }
+    // Stage 2: the preview is blended on the GPU, without any CPU work.
+    // Only materialize full pixels after the slider settles, for saving.
+    LaunchedEffect(source,previewLayer,strength) {
+        report(null)
+        rendered=null
+        val overlay=previewLayer ?: return@LaunchedEffect
+        delay(180)
+        var candidate: Bitmap?=null
         try {
             val output=withContext(Dispatchers.Default) {
                 renderLock.withLock {
                     coroutineContext.ensureActive()
-                    ManualRetouch.compose(source,generated,edit.strokes,strength,edit.bounds).also { pending=it }
+                    ManualRetouch.composeLayer(source,overlay,strength).also { candidate=it }
                 }
             }
+            coroutineContext.ensureActive()
             rendered=output
             report(output)
-            pending=null
+            candidate=null
         } catch(cancelled: CancellationException) { throw cancelled }
-        catch(_: Exception) { renderError="เตรียมภาพไม่สำเร็จ กรุณาลองย้อนกลับหรือปรับความแรงอีกครั้ง" }
-        finally { pending?.recycle(); rendering=false }
+        catch(_: Exception) { renderError="เตรียมภาพบันทึกไม่สำเร็จ" }
+        finally { candidate?.recycle() }
     }
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        ZoomableImageViewport(source,Modifier.fillMaxWidth().height(300.dp).testTag("retouch-preview"),
+        ZoomableImageViewport(source,Modifier.fillMaxWidth().height(340.dp).testTag("retouch-preview"),
             IntSize(source.width,source.height),onZoomChanged,state=zoom,gesturesEnabled=tool==RetouchTool.PAN) {
-            Image((if(before) source else rendered ?: source).asImageBitmap(),null,Modifier.fillMaxSize())
+            Image(source.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
+            if(!before) previewLayer?.let { layer ->
+                Image(layer.asImageBitmap(),null,Modifier.fillMaxSize(),
+                    alpha=strength.coerceIn(0f,1f),contentScale=ContentScale.Fit)
+            }
             Canvas(Modifier.fillMaxSize().semantics { stateDescription=if(before) "Original" else "Edited" }
                 .pointerInput(tool,busy,rendering,radius,edit) {
                     if(tool==RetouchTool.PAN || busy || rendering) return@pointerInput
