@@ -42,6 +42,7 @@ class MoustacheRetoucher(private val context: Context) {
     fun process(bitmap: Bitmap, faceIndex: Int, region: RetouchRegion = RetouchRegion.BOTH,
         engine: RetouchEngine = RetouchEngine.BASELINE,
         onDiagnostics: ((Bitmap, HairMaskDiagnostics.Stats) -> Unit)? = null,
+        extraDetail: Boolean = false,
         onProgress: (RetouchStage) -> Unit = {}
     ): Bitmap = synchronized(lock) {
         onProgress(RetouchStage.LOCATE)
@@ -451,6 +452,60 @@ class MoustacheRetoucher(private val context: Context) {
             }
             android.util.Log.i("KeeperJawGuard",
                 "restored original pixels=$fullyProtected, feathered=$softened")
+        }
+        // Optional offline quality experiment: run the *same licensed* AttGAN
+        // a second time with the normalized face moved 25 model pixels upward.
+        // This changes which facial-hair details receive model attention.
+        // Blend ONLY the bounded delta between the two model predictions into
+        // the original, already-approved baseline result. This cannot enlarge
+        // the edit mask, alter the jaw silhouette or distort the output canvas.
+        // Default is OFF: the trusted single-pass AttGAN remains unchanged.
+        if (extraDetail && engine == RetouchEngine.BASELINE) {
+            onProgress(RetouchStage.REFINE)
+            val movedTy = ty - 25f
+            val shiftedInput = FloatArray(PLANE*3)
+            for (yy in 0 until SIZE) for (xx in 0 until SIZE) {
+                val sx = (a*(xx-tx)-b*(yy-movedTy))/det
+                val sy = (b*(xx-tx)+a*(yy-movedTy))/det
+                for (c in 0..2) shiftedInput[c*PLANE+yy*SIZE+xx] =
+                    sampleOriginal(original,width,height,sx,sy,c)
+                        .roundToInt().coerceIn(0,255)/127.5f-1f
+            }
+            val shiftedGenerated = runModel(shiftedInput)
+            val refinementJawGuard = JawlineIntegrityGuard.fromLandmarks(
+                face,width,height,a,b,tx,ty
+            )
+            val noseY = p(2).y
+            val chinY = p(152).y
+            val scanTop = max(0, (noseY-span*.1f).toInt())
+            val scanBottom = min(height-1, (chinY+span*.08f).toInt())
+            val scanLeft = max(0,(min(p(234).x,p(454).x)-span*.1f).toInt())
+            val scanRight = min(width-1,(max(p(234).x,p(454).x)+span*.1f).toInt())
+            var corrected=0
+            for (yy in scanTop..scanBottom) for (xx in scanLeft..scanRight) {
+                val i=yy*width+xx
+                if (maskPixels[i]==Color.TRANSPARENT || distance[i]<=0f) continue
+                val jawWeight=refinementJawGuard.weightAt(xx,yy)
+                if (jawWeight<.995f) continue
+                val feather=(distance[i]/max(2f,span*.055f)).coerceIn(0f,1f)
+                val weight=feather*jawWeight*.60f
+                if (weight<=0f) continue
+                val u=a*xx+b*yy+tx
+                val v=-b*xx+a*yy+ty
+                val current=finalPixels[i]
+                val r=AttganDetailBlend.channel(
+                    Color.red(current),samplePlane(generated,u,v,0),
+                    samplePlane(shiftedGenerated,u,v-25f,0),weight)
+                val g=AttganDetailBlend.channel(
+                    Color.green(current),samplePlane(generated,u,v,1),
+                    samplePlane(shiftedGenerated,u,v-25f,1),weight)
+                val blue=AttganDetailBlend.channel(
+                    Color.blue(current),samplePlane(generated,u,v,2),
+                    samplePlane(shiftedGenerated,u,v-25f,2),weight)
+                val updated=Color.argb(Color.alpha(current),r,g,blue)
+                if (updated!=current) { finalPixels[i]=updated;corrected++ }
+            }
+            android.util.Log.i("KeeperOfflineDetail","two-view correction pixels=$corrected")
         }
         onProgress(RetouchStage.VERIFY)
         check(finalPixels.indices.all { Color.alpha(maskPixels[it]) != 0 || finalPixels[it] == original[it] })

@@ -81,4 +81,5 @@ independently in research/model_candidates and were NOT included in the APK.
 The LaMa experiment did not convincingly remove heavy beard on the tested
 portrait without introducing edge/texture concerns.
 
-CLOUD AI BETA 1.4.0-beta.16: public APK includes licensed local AttGAN and face parser, but does NOT bundle experimental beard-mobile-224.onnx (dataset provenance pending review). Cloud provider is AILabTools, called only after opt-in with user's own API key. Cloud result quality has not been independently confirmed against Meitu yet.
+
+OFFLINE BETA 1.4.0-beta.18: facial hair retouch uses the bundled AttGAN on device. The old AILabTools cloud beard removal API mode is removed. Optional experimental second-view processing uses a second pass of that same on-device model, with an inward feather and jawline protection; it is disabled by default.
