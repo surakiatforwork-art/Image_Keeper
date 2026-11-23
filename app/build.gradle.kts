@@ -14,8 +14,8 @@ android {
         applicationId = "com.branchphotovault"
         minSdk = 26
         targetSdk = 35
-        versionCode = 46
-        versionName = "1.4.0-beta.28-ChinStudent03-Private"
+        versionCode = 47
+        versionName = "1.4.0-beta.29-ChinContourV68-Private"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -58,6 +58,9 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     var v67Refinement by remember { mutableStateOf(false) }
     val hasStudent=remember { context.assets.list("retouch")?.contains(ChinStudent.asset)==true }
     var student by remember { mutableStateOf(false) }
+    // Side-by-side quality experiment. OFF keeps Chin Student 03 exactly
+    // as shipped in Beta 28, which the user confirmed was an improvement.
+    var naturalChin by remember { mutableStateOf(false) }
     // AttGAN remains the verified offline quality baseline. Extra detail is
     // optional, preserving the original single-pass result for comparison.
     var extraDetail by remember { mutableStateOf(false) }
@@ -122,7 +125,9 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                                 tool.processV6Passes(source,face,RetouchRegion.MOUSTACHE,v6CoverageStrength,
                                     passes=v6Passes,originalFace=points,v67Refinement=v67Refinement) else null
                             try {
-                                return@withContext V6PassOutcome(ChinStudent.apply(context,source,upper?.image ?: source,points),
+                                return@withContext V6PassOutcome(
+                                    ChinStudent.apply(context,source,upper?.image ?: source,points,
+                                        naturalContour=naturalChin),
                                     upper?.completedPasses ?: 0) to true
                             } finally { if(upper?.image !== source) upper?.image?.recycle() }
                         }
@@ -171,7 +176,9 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     result=outcome.image
                     message=if(retouchEngine == RetouchEngine.V6_OFFLINE)
                         if(beardChanged)
-                            if(student) "รุ่น 3 เสร็จแล้ว · ตรวจเงาและตอเคราก่อนบันทึก"
+                            if(student) if(naturalChin)
+                                "V6.8 เกลี่ยคางตามแนวหน้าแล้ว · เทียบกับรุ่น 3 ก่อนบันทึก"
+                                else "รุ่น 3 เสร็จแล้ว · ตรวจเงาและตอเคราก่อนบันทึก"
                             else if(v67Refinement) "V6.7 เก็บหนวดและเคราแล้ว · ตรวจขอบปากและรูปคางก่อนบันทึก"
                             else "V6.6 เก็บหนวดและเคราด้วย AI แล้ว · ตรวจปาก คาง และขอบผิว"
                         else if(v66BeardReconstruction && region != RetouchRegion.MOUSTACHE)
@@ -276,6 +283,13 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                             Text("ทดลองลบเครา · รุ่น 3",Modifier.weight(1f))
                             Switch(checked=student,enabled=!busy,onCheckedChange={
                                 student=it;result=null;composite=null;strength=1f
+                            })
+                        }
+                        if(student) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                            Text("V6.8 · เกลี่ยคางตามแนวเดิม (ทดลอง)",Modifier.weight(1f),
+                                style=MaterialTheme.typography.bodySmall)
+                            Switch(checked=naturalChin,enabled=!busy,onCheckedChange={
+                                naturalChin=it;result=null;composite=null;strength=1f
                             })
                         }
                         if(!student) {

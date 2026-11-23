@@ -9,7 +9,13 @@ import kotlin.math.*
 
 internal object ChinStudent {
     const val asset = "chin-student-03.onnx"
-    fun apply(ctx: Context, src: Bitmap, base: Bitmap, face: List<NormalizedLandmark>): Bitmap {
+    fun apply(
+        ctx: Context, src: Bitmap, base: Bitmap,
+        face: List<NormalizedLandmark>,
+        naturalContour: Boolean=false
+    ): Bitmap {
+        require(src.width==base.width && src.height==base.height)
+        require(face.size>454)
         val s=384
         val n=s*s
         val pts=FloatArray(face.size*2) { i -> if(i%2==0) face[i/2].x()*src.width else face[i/2].y()*src.height }
@@ -64,11 +70,53 @@ internal object ChinStudent {
             mapped.getPixels(pixels,0,w,0,0,w,h)
         } finally { mapped.recycle(); patch.recycle() }
         val guard=LipSafeRasterGuard.fromFace(face,src.width,src.height)
+        // Baseline Beta 28 is byte-for-byte preserved when naturalContour is
+        // disabled. The V6.8 experimental path only changes compositing,
+        // not the tiny trained Chin Student checkpoint.
+        val sourceContour=if(naturalContour)
+            OriginalFaceContourGuard.fromFace(face,src.width,src.height)
+            else null
+        val hair=if(naturalContour) runCatching {
+            BeardSegmentationTool(ctx).analyse(src,face)
+        }.onFailure {
+            android.util.Log.w("KeeperChinV68",
+                "Beard classifier unavailable; keeping Beta 28 compositing",it)
+        }.getOrNull() else null
+        val mouthWidth=hypot(
+            (face[61].x()-face[291].x())*src.width,
+            (face[61].y()-face[291].y())*src.height
+        ).coerceAtLeast(1f)
         val colors=IntArray(w*h); base.getPixels(colors,0,w,x,y,w,h)
-        for(i in colors.indices) if(!guard.at(x+i%w,y+i/w)) {
-            fun channel(k:Int)=(((colors[i] ushr k) and 255)+((pixels[i] ushr k) and 255)-128).coerceIn(0,255)
-            colors[i]=Color.rgb(channel(16),channel(8),channel(0))
+        var altered=0
+        var attenuated=0
+        for(i in colors.indices) {
+            val px=x+i%w
+            val py=y+i/w
+            if(guard.at(px,py))continue
+            val residualR=((pixels[i] ushr 16) and 255)-128
+            val residualG=((pixels[i] ushr 8) and 255)-128
+            val residualB=(pixels[i] and 255)-128
+            if(residualR==0 && residualG==0 && residualB==0)continue
+            val weight=if(naturalContour && hair!=null) ChinContourComposite.weight(
+                hair.at(px,py),sourceContour!!.signedDistance(px.toFloat(),py.toFloat()),
+                mouthWidth,.98f
+            ) else 1f
+            val old=colors[i]
+            fun channel(k:Int):Int {
+                val delta=((pixels[i] ushr k) and 255)-128
+                return if(naturalContour) ChinContourComposite.compositeChannel(
+                    (old ushr k) and 255,delta,weight
+                ) else (((old ushr k) and 255)+delta).coerceIn(0,255)
+            }
+            val next=Color.rgb(channel(16),channel(8),channel(0))
+            if(next!=old) {
+                altered++
+                if(weight<.95f)attenuated++
+                colors[i]=next
+            }
         }
+        if(naturalContour) android.util.Log.i("KeeperChinV68",
+            "composite_pixels=$altered softened=$attenuated")
         return base.copy(Bitmap.Config.ARGB_8888,true).apply { setPixels(colors,0,w,x,y,w,h) }
     }
 }
