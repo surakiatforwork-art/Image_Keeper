@@ -14,8 +14,8 @@ android {
         applicationId = "com.branchphotovault"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.4.0-beta.19"
+        versionCode = 45
+        versionName = "1.4.0-beta.27-SmartShaveV6.7-ContourPrivate"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -24,6 +24,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Original package + matching signing key preserve Image Keeper data.
+            // No applicationIdSuffix: this is an in-place user-approved upgrade.
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

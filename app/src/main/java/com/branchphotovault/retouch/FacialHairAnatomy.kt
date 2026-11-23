@@ -58,6 +58,10 @@ internal class FacialHairAnatomy(
         return u in left..right && v in (min(noseV,lipV)+gap*.09f)..(max(noseV,lipV)+gap*.26f)
     }
 
+    /** Aligned beard search-zone test; does not itself grant edit permission. */
+    fun isBeard(x:Int,y:Int):Boolean =
+        isBeard(a*x+b*y+tx,-b*x+a*y+ty)
+
     private fun isBeard(u:Float,v:Float):Boolean {
         if(region == RetouchRegion.MOUSTACHE) return false
         val top=min(lowerLipV,lipV)-mouthW*.12f

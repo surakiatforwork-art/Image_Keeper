@@ -24,6 +24,8 @@ internal object ResidualHairRepair {
         faceSpan: Float,
         radiusScale: Float = 1f,
         strengthScale: Float = 1f,
+        strandOnly: Boolean = false,
+        candidateEvidence: ((Int,Int)->Boolean)? = null,
         permitted: (Int, Int) -> Boolean
     ): Pair<IntArray, Stats> {
         require(width > 0 && height > 0 && original.size == width * height && prepared.size == original.size)
@@ -42,6 +44,7 @@ internal object ResidualHairRepair {
 
         for (y in yMin until height - yMin) for (x in xMin until width - xMin) {
             if (!permitted(x, y)) continue
+            if (candidateEvidence?.invoke(x,y)==false) continue
             val i = y * width + x
             val source = original[i]
             val current = prepared[i]
@@ -52,6 +55,8 @@ internal object ResidualHairRepair {
             var bestContrast = 0f
             var bestA = 0
             var bestB = 0
+            var leastContrast=Float.POSITIVE_INFINITY
+            var validDirections=0
 
             // Choose the cross-strand direction with least endpoint imbalance,
             // so smooth cast shadows/edges will not be treated like small hairs.
@@ -72,6 +77,8 @@ internal object ResidualHairRepair {
                 val originalContrast = (sourceA + sourceB) * .5f - sourceLum
                 val residualContrast = (processedA + processedB) * .5f - currentLum
                 val imbalance = kotlin.math.abs(processedA - processedB)
+                validDirections++
+                leastContrast=min(leastContrast,min(originalContrast,residualContrast).coerceAtLeast(0f))
                 // Both source and output must retain strand-like local contrast.
                 if (originalContrast < 8f || residualContrast < 6f || imbalance > 22f) continue
                 val score = min(originalContrast * .85f, residualContrast) - imbalance * .18f
@@ -82,6 +89,8 @@ internal object ResidualHairRepair {
                 }
             }
             if (bestContrast < 6f) continue
+            // Round pores/moles are ambiguous; the focused lip cleanup requires directional strand evidence.
+            if(strandOnly && (validDirections<2 || leastContrast>=bestContrast*.65f)) continue
             candidates++
             val a = bestA; val b = bestB
             val targetR = (Color.red(a) + Color.red(b)) * .5f

@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.branchphotovault.retouch.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -65,7 +66,7 @@ fun HoldOriginalButton(enabled: Boolean, onHolding: (Boolean) -> Unit) {
 @Composable
 fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, busy: Boolean,
     detectedBounds: RetouchBounds?, onZoomChanged: (Boolean) -> Unit, onEditingChanged: (Boolean) -> Unit,
-    onRendered: (Bitmap?) -> Unit) {
+    onRendered: (Bitmap?) -> Unit, previewHeight: Dp = 340.dp) {
     var tool by remember(source,generated) { mutableStateOf(RetouchTool.PAN) }
     var before by remember { mutableStateOf(false) }
     var radius by remember { mutableFloatStateOf(.035f) }
@@ -134,7 +135,7 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
         finally { candidate?.recycle() }
     }
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        ZoomableImageViewport(source,Modifier.fillMaxWidth().height(340.dp).testTag("retouch-preview"),
+        ZoomableImageViewport(source,Modifier.fillMaxWidth().height(previewHeight).testTag("retouch-preview"),
             IntSize(source.width,source.height),onZoomChanged,state=zoom,
             gesturesEnabled=true,singleFingerPan=tool==RetouchTool.PAN) {
             Image(source.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
