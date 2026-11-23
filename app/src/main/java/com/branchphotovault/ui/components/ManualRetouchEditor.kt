@@ -3,6 +3,8 @@ package com.branchphotovault.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -66,7 +68,8 @@ fun HoldOriginalButton(enabled: Boolean, onHolding: (Boolean) -> Unit) {
 @Composable
 fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, busy: Boolean,
     detectedBounds: RetouchBounds?, onZoomChanged: (Boolean) -> Unit, onEditingChanged: (Boolean) -> Unit,
-    onRendered: (Bitmap?) -> Unit, previewHeight: Dp = 340.dp) {
+    onRendered: (Bitmap?) -> Unit, previewHeight: Dp = 340.dp,
+    controlsHeight: Dp = 156.dp) {
     var tool by remember(source,generated) { mutableStateOf(RetouchTool.PAN) }
     var before by remember { mutableStateOf(false) }
     var radius by remember { mutableFloatStateOf(.035f) }
@@ -227,6 +230,13 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
                 }
             }
         }
+        // Keep the photo fixed. Advanced hand-retouch tools scroll in their
+        // own small area, so switching to Healing Brush cannot hide preview
+        // or push the one-tap AI / Save actions off the screen.
+        if(generated!=null) {
+        Column(Modifier.fillMaxWidth().heightIn(max=controlsHeight)
+            .verticalScroll(rememberScrollState()),
+            verticalArrangement=Arrangement.spacedBy(5.dp)) {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             RetouchTool.entries.forEach { option ->
                 FilterChip(modifier=Modifier.testTag("tool-"+option.name.lowercase()),
@@ -265,12 +275,14 @@ fun ManualRetouchEditor(source: Bitmap, generated: Bitmap?, strength: Float, bus
         }
         Text("ใช้ 1 นิ้วทา/วาด • ใช้ 2 นิ้วเลื่อนและซูมขณะใช้ทุกเครื่องมือได้",
             style=MaterialTheme.typography.bodySmall)
+        } // scrollable manual tools
         Row(verticalAlignment=Alignment.CenterVertically) {
             IconButton(enabled=!busy && !rendering && history.size>1,onClick={ report(null); redo.add(history.removeAt(history.lastIndex)) }) { Icon(Icons.Outlined.Undo,"ย้อนกลับ") }
             IconButton(enabled=!busy && !rendering && redo.isNotEmpty(),onClick={ report(null); history.add(redo.removeAt(redo.lastIndex)) }) { Icon(Icons.Outlined.Redo,"ทำซ้ำ") }
             Spacer(Modifier.weight(1f))
             HoldOriginalButton(generated!=null && !busy) { before=it }
         }
+        } // generated result tools; initial screen stays uncluttered
         if(rendering) LinearProgressIndicator(Modifier.fillMaxWidth())
         renderError?.let { Text(it,color=MaterialTheme.colorScheme.error) }
 
