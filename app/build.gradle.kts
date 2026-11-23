@@ -14,8 +14,8 @@ android {
         applicationId = "com.branchphotovault"
         minSdk = 26
         targetSdk = 35
-        versionCode = 45
-        versionName = "1.4.0-beta.27-SmartShaveV6.7-ContourPrivate"
+        versionCode = 46
+        versionName = "1.4.0-beta.28-ChinStudent03-Private"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

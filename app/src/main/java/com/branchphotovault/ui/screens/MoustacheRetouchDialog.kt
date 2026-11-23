@@ -24,6 +24,7 @@ import com.branchphotovault.retouch.MoustacheRetoucher
 import com.branchphotovault.retouch.RetouchRegion
 import com.branchphotovault.retouch.RetouchEngine
 import com.branchphotovault.retouch.BeardReconstructionV66
+import com.branchphotovault.retouch.ChinStudent
 import com.branchphotovault.retouch.V6PassOutcome
 import com.branchphotovault.retouch.processV6Passes
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
@@ -55,6 +56,8 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
     val privateResearchAvailable=remember { context.assets.list("retouch")?.contains("beard-mobile-224.onnx")==true }
     var retouchEngine by remember { mutableStateOf(if(privateResearchAvailable) RetouchEngine.V6_OFFLINE else RetouchEngine.BASELINE) }
     var v67Refinement by remember { mutableStateOf(false) }
+    val hasStudent=remember { context.assets.list("retouch")?.contains(ChinStudent.asset)==true }
+    var student by remember { mutableStateOf(false) }
     // AttGAN remains the verified offline quality baseline. Extra detail is
     // optional, preserving the original single-pass result for comparison.
     var extraDetail by remember { mutableStateOf(false) }
@@ -113,6 +116,16 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                 try {
                     val (outcome,beardChanged)=withContext(Dispatchers.Default) {
                         val tool=MoustacheRetoucher(context)
+                        if(student && retouchEngine==RetouchEngine.V6_OFFLINE && region!=RetouchRegion.MOUSTACHE) {
+                            val points=detectedFaces[face]
+                            val upper=if(region==RetouchRegion.BOTH)
+                                tool.processV6Passes(source,face,RetouchRegion.MOUSTACHE,v6CoverageStrength,
+                                    passes=v6Passes,originalFace=points,v67Refinement=v67Refinement) else null
+                            try {
+                                return@withContext V6PassOutcome(ChinStudent.apply(context,source,upper?.image ?: source,points),
+                                    upper?.completedPasses ?: 0) to true
+                            } finally { if(upper?.image !== source) upper?.image?.recycle() }
+                        }
                         val base=if(retouchEngine == RetouchEngine.V6_OFFLINE) {
                             tool.processV6Passes(
                                 source,face,region,v6CoverageStrength,
@@ -158,7 +171,8 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                     result=outcome.image
                     message=if(retouchEngine == RetouchEngine.V6_OFFLINE)
                         if(beardChanged)
-                            if(v67Refinement) "V6.7 เก็บหนวดและเคราแล้ว · ตรวจขอบปากและรูปคางก่อนบันทึก"
+                            if(student) "รุ่น 3 เสร็จแล้ว · ตรวจเงาและตอเคราก่อนบันทึก"
+                            else if(v67Refinement) "V6.7 เก็บหนวดและเคราแล้ว · ตรวจขอบปากและรูปคางก่อนบันทึก"
                             else "V6.6 เก็บหนวดและเคราด้วย AI แล้ว · ตรวจปาก คาง และขอบผิว"
                         else if(v66BeardReconstruction && region != RetouchRegion.MOUSTACHE)
                             "V6 เสร็จ แต่ AI เคราไม่สำเร็จ · ตรวจภาพก่อนบันทึก"
@@ -258,6 +272,13 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                         })
                     }
                     if(region != RetouchRegion.MOUSTACHE) {
+                        if(hasStudent) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                            Text("ทดลองลบเครา · รุ่น 3",Modifier.weight(1f))
+                            Switch(checked=student,enabled=!busy,onCheckedChange={
+                                student=it;result=null;composite=null;strength=1f
+                            })
+                        }
+                        if(!student) {
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                             horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                             Column(Modifier.weight(1f)) {
@@ -280,6 +301,7 @@ internal fun MoustacheRetouchDialog(photo: PhotoEntity, dismiss: () -> Unit) {
                                 result=null;composite=null;strength=1f
                             },enabled=!busy,valueRange=.40f..1f)
 
+                        }
                         }
                     }
                     Text("จำนวนรอบ AI",style=MaterialTheme.typography.titleSmall)
