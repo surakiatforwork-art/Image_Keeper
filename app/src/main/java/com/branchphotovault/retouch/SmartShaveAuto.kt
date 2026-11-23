@@ -45,7 +45,8 @@ internal object SmartShaveAuto {
         source:Bitmap,
         faceIndex:Int,
         face:List<NormalizedLandmark>,
-        onStatus:(String)->Unit={}
+        onStatus:(String)->Unit={},
+        lipBlend:Boolean=true
     ):Outcome {
         require(face.size>454 && !source.isRecycled)
         fun asset(name:String)=
@@ -56,6 +57,23 @@ internal object SmartShaveAuto {
         val tool=MoustacheRetoucher(context)
         var moustache:Bitmap=source
         var moustacheApplied=false
+        fun finish(image:Bitmap,stage:BeardStage):Outcome {
+            if(!lipBlend || !moustacheApplied || image===source)
+                return Outcome(image,moustacheApplied,stage)
+            return try {
+                onStatus("กำลังเกลี่ยขอบปากให้เป็นผิวเดียวกัน…")
+                val (polished,stats)=LipBorderHarmonizer.refine(source,image,face)
+                Log.i("KeeperOneTap",
+                    "lipBorder changed="+stats.changed+
+                    " donorless="+stats.noEditedDonor+
+                    " duration_ms="+stats.elapsedMs)
+                if(polished !== image && image !== source)image.recycle()
+                Outcome(polished,moustacheApplied,stage)
+            }catch(error:Exception){
+                Log.w("KeeperOneTap","Lip border polish failed; retaining AI result",error)
+                Outcome(image,moustacheApplied,stage)
+            }
+        }
         try {
             onStatus("กำลังลบหนวดรอบริมฝีปากด้วย AI…")
             try {
@@ -92,7 +110,7 @@ internal object SmartShaveAuto {
                         moustache.recycle()
                     Log.i("KeeperOneTap",
                         "result=chin-student03 + contour-v68 moustache="+moustacheApplied)
-                    return Outcome(edited,moustacheApplied,BeardStage.CHIN_STUDENT)
+                    return finish(edited,BeardStage.CHIN_STUDENT)
                 } catch(cancelled:CancellationException) { throw cancelled }
                 catch(error:Exception) {
                     Log.w("KeeperOneTap","Chin Student failed; trying safe fallback",error)
@@ -107,7 +125,7 @@ internal object SmartShaveAuto {
                     if(moustache !== source && edited !== moustache)
                         moustache.recycle()
                     Log.i("KeeperOneTap","result=facebench-fallback")
-                    return Outcome(edited,moustacheApplied,BeardStage.FACEBENCH_FALLBACK)
+                    return finish(edited,BeardStage.FACEBENCH_FALLBACK)
                 } catch(cancelled:CancellationException) { throw cancelled }
                 catch(error:Exception) {
                     Log.w("KeeperOneTap","Beard fallback failed",error)
@@ -124,14 +142,14 @@ internal object SmartShaveAuto {
                     ).image
                     if(moustache !== source && edited !== moustache)
                         moustache.recycle()
-                    return Outcome(edited,true,BeardStage.V6_ONLY)
+                    return finish(edited,BeardStage.V6_ONLY)
                 } catch(cancelled:CancellationException) { throw cancelled }
                 catch(error:Exception) { Log.w("KeeperOneTap","V6 fallback failed",error) }
             }
             if(moustacheApplied) {
                 val retained=moustache
                 moustache=source // ownership passes to caller; do not recycle.
-                return Outcome(retained,true,BeardStage.UNAVAILABLE)
+                return finish(retained,BeardStage.UNAVAILABLE)
             }
             error("AI ไม่สามารถประมวลผลหนวดหรือเคราได้ โปรดลองอีกครั้ง")
         } catch(error:Throwable) {
