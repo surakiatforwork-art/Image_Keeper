@@ -14,8 +14,8 @@ android {
         applicationId = "com.branchphotovault"
         minSdk = 26
         targetSdk = 35
-        versionCode = 51
-        versionName = "1.4.0-beta.33-BrightGalleryLayouts-Private"
+        versionCode = 52
+        versionName = "1.4.0-beta.34-GalleryToolbar-Private"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

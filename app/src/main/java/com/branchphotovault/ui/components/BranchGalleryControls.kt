@@ -5,15 +5,18 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.ViewList
-import androidx.compose.material.icons.outlined.Sort
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material.icons.outlined.ViewList
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,128 +35,173 @@ import com.branchphotovault.data.repository.GalleryViewConfig
 import java.io.File
 import java.util.Date
 
-/** Display settings live inside every branch folder and are applied immediately. */
+/**
+ * Separate sorting from display configuration:
+ * sorting is always visible in the toolbar; grid/list and column density live under ⋮.
+ */
 @Composable
-fun BranchGalleryControls(
+fun GallerySortDropdown(
     config: GalleryViewConfig,
-    onLayoutChange: (GalleryLayout) -> Unit,
-    onColumnsChange: (Int) -> Unit,
-    onSortChange: (GalleryPhotoSort) -> Unit,
-    modifier: Modifier = Modifier
+    onSortChange: (GalleryPhotoSort) -> Unit
 ) {
-    var sortExpanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
-    GlassCard(modifier = modifier) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    Modifier.background(scheme.surfaceVariant, RoundedCornerShape(10.dp)).padding(3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    GalleryModeButton(
-                        selected = config.layout == GalleryLayout.GRID,
-                        label = "ตาราง",
-                        onClick = { onLayoutChange(GalleryLayout.GRID) }
-                    ) { Icon(Icons.Outlined.GridView, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                    GalleryModeButton(
-                        selected = config.layout == GalleryLayout.LIST,
-                        label = "รายการ",
-                        onClick = { onLayoutChange(GalleryLayout.LIST) }
-                    ) { Icon(Icons.Outlined.ViewList, contentDescription = null, modifier = Modifier.size(18.dp)) }
+    Box {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                Icons.Outlined.Sort,
+                contentDescription = "จัดเรียงภาพ",
+                modifier = Modifier.size(20.dp),
+                tint = scheme.onSurfaceVariant
+            )
+            Text(
+                if (config.sort == GalleryPhotoSort.NEWEST_FIRST) "ล่าสุด" else "เก่าสุด",
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurface,
+                maxLines = 1
+            )
+            Icon(
+                Icons.Outlined.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = scheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            GallerySortChoice(
+                label = "ล่าสุด → เก่าสุด",
+                selected = config.sort == GalleryPhotoSort.NEWEST_FIRST,
+                onClick = {
+                    onSortChange(GalleryPhotoSort.NEWEST_FIRST)
+                    expanded = false
                 }
-
-                Box {
-                    OutlinedButton(
-                        onClick = { sortExpanded = true },
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.heightIn(min = 42.dp)
-                    ) {
-                        Icon(Icons.Outlined.Sort, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            if (config.sort == GalleryPhotoSort.NEWEST_FIRST) "ล่าสุดก่อน" else "เก่าสุดก่อน",
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1
-                        )
-                        Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp))
-                    }
-                    DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("ล่าสุด → เก่าสุด") },
-                            onClick = { onSortChange(GalleryPhotoSort.NEWEST_FIRST); sortExpanded = false },
-                            leadingIcon = { Icon(Icons.Outlined.Sort, contentDescription = null) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("เก่าสุด → ล่าสุด") },
-                            onClick = { onSortChange(GalleryPhotoSort.OLDEST_FIRST); sortExpanded = false },
-                            leadingIcon = { Icon(Icons.Outlined.Sort, contentDescription = null) }
-                        )
-                    }
+            )
+            GallerySortChoice(
+                label = "เก่าสุด → ล่าสุด",
+                selected = config.sort == GalleryPhotoSort.OLDEST_FIRST,
+                onClick = {
+                    onSortChange(GalleryPhotoSort.OLDEST_FIRST)
+                    expanded = false
                 }
-            }
-            if (config.layout == GalleryLayout.GRID) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "คอลัมน์",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = scheme.onSurfaceVariant
-                    )
-                    for (count in 3..6) {
-                        val active = config.columns == count
-                        Surface(
-                            onClick = { onColumnsChange(count) },
-                            modifier = Modifier.weight(1f).height(38.dp),
-                            shape = RoundedCornerShape(9.dp),
-                            color = if (active) scheme.primary else scheme.surfaceVariant,
-                            contentColor = if (active) scheme.onPrimary else scheme.onSurfaceVariant
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(count.toString(), style = MaterialTheme.typography.labelLarge)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text(
-                    "รูปภาพ · ชื่อไฟล์ · วันที่",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant
-                )
-            }
+            )
         }
     }
 }
 
 @Composable
-private fun GalleryModeButton(
-    selected: Boolean,
-    label: String,
-    onClick: () -> Unit,
-    icon: @Composable () -> Unit
+private fun GallerySortChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        trailingIcon = {
+            if (selected) Icon(
+                Icons.Outlined.Check,
+                contentDescription = "เลือกอยู่",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        onClick = onClick
+    )
+}
+
+/** Only a three-dot toolbar action — no additional gallery configuration card. */
+@Composable
+fun GalleryViewOptionsMenu(
+    config: GalleryViewConfig,
+    onLayoutChange: (GalleryLayout) -> Unit,
+    onColumnsChange: (Int) -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) scheme.primary else Color.Transparent,
-        contentColor = if (selected) scheme.onPrimary else scheme.onSurfaceVariant
-    ) {
-        Row(
-            Modifier.height(38.dp).padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = "เพิ่มเติม: มุมมองภาพและจำนวนคอลัมน์")
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(min = 240.dp)
         ) {
-            icon()
-            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text(
+                "รูปแบบการแสดงผล",
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+            )
+            DropdownMenuItem(
+                text = { Text("ตาราง") },
+                leadingIcon = {
+                    Icon(Icons.Outlined.GridView, contentDescription = null, modifier = Modifier.size(20.dp))
+                },
+                trailingIcon = {
+                    if (config.layout == GalleryLayout.GRID) {
+                        Icon(Icons.Outlined.Check, contentDescription = "เลือกอยู่", tint = scheme.primary)
+                    }
+                },
+                onClick = {
+                    onLayoutChange(GalleryLayout.GRID)
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("รายการ") },
+                leadingIcon = {
+                    Icon(Icons.Outlined.ViewList, contentDescription = null, modifier = Modifier.size(20.dp))
+                },
+                trailingIcon = {
+                    if (config.layout == GalleryLayout.LIST) {
+                        Icon(Icons.Outlined.Check, contentDescription = "เลือกอยู่", tint = scheme.primary)
+                    }
+                },
+                onClick = {
+                    onLayoutChange(GalleryLayout.LIST)
+                    expanded = false
+                }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 6.dp),
+                color = scheme.outlineVariant
+            )
+            Text(
+                "จำนวนคอลัมน์ (มุมมองตาราง)",
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            )
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                for (count in 3..6) {
+                    val selected = config.columns == count && config.layout == GalleryLayout.GRID
+                    Surface(
+                        onClick = {
+                            // Selecting a column count immediately changes to the grid view.
+                            onColumnsChange(count)
+                            expanded = false
+                        },
+                        modifier = Modifier.size(width = 48.dp, height = 44.dp),
+                        color = if (selected) scheme.primary else scheme.surfaceVariant,
+                        contentColor = if (selected) scheme.onPrimary else scheme.onSurface,
+                        shape = RoundedCornerShape(9.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(count.toString(), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -74,7 +74,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.ui.components.ExportProgressCard
-import com.branchphotovault.ui.components.BranchGalleryControls
+import com.branchphotovault.ui.components.GallerySortDropdown
+import com.branchphotovault.ui.components.GalleryViewOptionsMenu
 import com.branchphotovault.ui.components.BranchPhotoListItem
 import com.branchphotovault.data.repository.GalleryLayout
 import com.branchphotovault.data.repository.GalleryPhotoSort
@@ -239,6 +240,16 @@ fun BranchPreviewScreen(
                         IconButton(onClick = viewModel::clearSelection) {
                             Icon(Icons.Rounded.Close, contentDescription = "Clear selection")
                         }
+                    } else {
+                        GallerySortDropdown(
+                            config = galleryViewConfig,
+                            onSortChange = viewModel::setGallerySort
+                        )
+                        GalleryViewOptionsMenu(
+                            config = galleryViewConfig,
+                            onLayoutChange = viewModel::setGalleryLayout,
+                            onColumnsChange = viewModel::setGalleryColumns
+                        )
                     }
                 }
             )
@@ -338,14 +349,6 @@ fun BranchPreviewScreen(
                             }
                         }
                     }
-
-                    BranchGalleryControls(
-                        config = galleryViewConfig,
-                        onLayoutChange = viewModel::setGalleryLayout,
-                        onColumnsChange = viewModel::setGalleryColumns,
-                        onSortChange = viewModel::setGallerySort,
-                        modifier = Modifier.fillMaxWidth()
-                    )
 
                     uiState.exportProgress?.let { exportProgress ->
                         ExportProgressCard(progress = exportProgress)
