@@ -5,6 +5,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.provider.Settings
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
@@ -48,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,6 +68,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.branchphotovault.LocalAppContainer
+import com.branchphotovault.MainActivity
 import kotlinx.coroutines.launch
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -87,6 +94,7 @@ fun CapturePhotoScreen(
     }
     var lensFacing by rememberSaveable { mutableStateOf(CameraSelector.LENS_FACING_FRONT) }
     var captureLocked by remember { mutableStateOf(false) }
+    var cameraReady by remember { mutableStateOf(false) }
     var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
 
     val preview = remember {
@@ -132,17 +140,72 @@ fun CapturePhotoScreen(
     }
 
     LaunchedEffect(lensFacing, hasCameraPermission) {
+        cameraReady = false
         if (!hasCameraPermission) return@LaunchedEffect
-        val cameraProvider = context.getCameraProvider()
-        val cameraSelector = CameraSelector.Builder()
-            .requireLensFacing(lensFacing)
-            .build()
-        cameraProvider.unbindAll()
-        cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture)
+        try {
+            val cameraProvider = context.getCameraProvider()
+            val cameraSelector = CameraSelector.Builder()
+                .requireLensFacing(lensFacing)
+                .build()
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture)
+            cameraReady = true
+        } catch (error: Exception) {
+            snackbarHostState.showSnackbar(error.message ?: "เปิดกล้องไม่สำเร็จ")
+        }
     }
 
     LaunchedEffect(lensFacing, previewViewRef) {
         previewViewRef?.applyFrontCameraMirror(lensFacing == CameraSelector.LENS_FACING_FRONT)
+    }
+
+    // A single capture path for the on-screen button and both physical volume keys.
+    // captureLocked blocks long-press repeats and rapid taps until CameraX has finished.
+    val takePhoto: () -> Unit = capture@{
+        if (captureLocked || !hasCameraPermission || !cameraReady) return@capture
+        captureLocked = true
+        try {
+            val tempFile = container.photoRepository.createTempCaptureFile(account, branchCode)
+            imageCapture.targetRotation = previewViewRef?.display?.rotation
+                ?: Surface.ROTATION_0
+            imageCapture.takePicture(
+                ImageCapture.OutputFileOptions.Builder(tempFile).build(),
+                ContextCompat.getMainExecutor(context),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                        context.vibrateCaptureConfirmation()
+                        onCaptured(
+                            tempFile.absolutePath,
+                            lensFacing == CameraSelector.LENS_FACING_FRONT
+                        )
+                    }
+
+                    override fun onError(exception: ImageCaptureException) {
+                        captureLocked = false
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                exception.message ?: "ถ่ายภาพไม่สำเร็จ"
+                            )
+                        }
+                    }
+                }
+            )
+        } catch (error: Exception) {
+            captureLocked = false
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(error.message ?: "ถ่ายภาพไม่สำเร็จ")
+            }
+        }
+    }
+
+    // DisposableEffect only exists while this camera composable is on screen.
+    // rememberUpdatedState prevents the key callback from using stale camera state.
+    val currentCapture = rememberUpdatedState(takePhoto)
+    val hostActivity = context.findActivity() as? MainActivity
+    DisposableEffect(hostActivity) {
+        val listener: () -> Unit = { currentCapture.value.invoke() }
+        hostActivity?.registerVolumeShutter(listener)
+        onDispose { hostActivity?.unregisterVolumeShutter(listener) }
     }
 
     Surface(color = Color.Black) {
@@ -199,6 +262,7 @@ fun CapturePhotoScreen(
                     ) {
                         IconButton(
                             onClick = {
+                                cameraReady = false
                                 lensFacing = if (lensFacing == CameraSelector.LENS_FACING_FRONT) {
                                     CameraSelector.LENS_FACING_BACK
                                 } else {
@@ -224,37 +288,8 @@ fun CapturePhotoScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Button(
-                            onClick = {
-                                if (captureLocked) return@Button
-                                captureLocked = true
-                                val tempFile = container.photoRepository.createTempCaptureFile(account, branchCode)
-                                imageCapture.targetRotation = previewViewRef?.display?.rotation
-                                    ?: Surface.ROTATION_0
-                                imageCapture.takePicture(
-                                    ImageCapture.OutputFileOptions.Builder(tempFile).build(),
-                                    ContextCompat.getMainExecutor(context),
-                                    object : ImageCapture.OnImageSavedCallback {
-                                        override fun onImageSaved(
-                                            outputFileResults: ImageCapture.OutputFileResults
-                                        ) {
-                                            onCaptured(
-                                                tempFile.absolutePath,
-                                                lensFacing == CameraSelector.LENS_FACING_FRONT
-                                            )
-                                        }
-
-                                        override fun onError(exception: ImageCaptureException) {
-                                            captureLocked = false
-                                            coroutineScope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    exception.message ?: "Failed to capture photo."
-                                                )
-                                            }
-                                        }
-                                    }
-                                )
-                            },
-                            enabled = !captureLocked,
+                            onClick = takePhoto,
+                            enabled = !captureLocked && cameraReady && hasCameraPermission,
                             modifier = Modifier.size(80.dp),
                             shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
@@ -354,4 +389,31 @@ private fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/**
+ * A short, low-amplitude pulse only after CameraX confirms the image was written.
+ * Respect the system's haptic feedback setting; no permission prompt is necessary.
+ */
+private fun Context.vibrateCaptureConfirmation() {
+    val enabled = Settings.System.getInt(
+        contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
+    ) != 0
+    if (!enabled) return
+
+    try {
+        @Suppress("DEPRECATION")
+        val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+        if (vibrator?.hasVibrator() == true) {
+            vibrator.vibrate(VibrationEffect.createOneShot(26L, 48))
+        }
+    } catch (_: SecurityException) {
+        // Haptics are optional; never let a vibration failure affect a saved photo.
+    } catch (_: RuntimeException) {
+        // Some manufacturers may disable or restrict the vibration service.
+    }
 }
