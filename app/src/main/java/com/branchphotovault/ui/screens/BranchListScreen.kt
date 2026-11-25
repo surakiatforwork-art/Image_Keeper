@@ -1,65 +1,41 @@
 package com.branchphotovault.ui.screens
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.DropdownMenuItem
-import com.branchphotovault.ui.components.GlassFloatingActionButton as FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
-import com.branchphotovault.ui.components.GlassTextField as OutlinedTextField
-import com.branchphotovault.ui.components.GlassScaffold as Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import com.branchphotovault.ui.components.GlassToolbar as TopAppBar
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.res.painterResource
-import com.branchphotovault.R
-import com.branchphotovault.ui.components.GlassSearchBar
-import com.branchphotovault.ui.components.GlassDropdown
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.branchphotovault.R
 import com.branchphotovault.data.model.BranchSortOption
-import com.branchphotovault.ui.components.BranchListItemCard
+import com.branchphotovault.ui.components.*
 import com.branchphotovault.ui.viewmodel.AddBranchViewModel
+import com.branchphotovault.ui.viewmodel.BranchListUiState
 import com.branchphotovault.ui.viewmodel.BranchListViewModel
 import java.util.Date
 
+/**
+ * Unslop: branch photos are the product. Quiet archive chrome, consistent
+ * 4dp spacing, restrained single-accent controls, original ghost artwork.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BranchListScreen(
@@ -69,194 +45,209 @@ fun BranchListScreen(
     onOpenBranch: (account: String, branchCode: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-
+    val snackbarHostState=remember { SnackbarHostState() }
     LaunchedEffect(uiState.message) {
-        val message = uiState.message ?: return@LaunchedEffect
+        val message=uiState.message ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
         viewModel.clearMessage()
     }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Image(painterResource(R.drawable.keeper_brand),null,Modifier.size(36.dp).graphicsLayer { scaleX=1.4f; scaleY=1.4f })
-                    Text("Image Keeper",style=androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                        maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                } },
-                actions = {
-                    IconButton(
-                        onClick = viewModel::syncBranches,
-                        enabled = !uiState.isSyncing
+    GlassScaffold(
+        topBar={
+            GlassToolbar(
+                title={
+                    Row(
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(12.dp)
                     ) {
-                        if (uiState.isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(Icons.Rounded.Refresh, contentDescription = "Sync branches")
+                        Image(painterResource(R.drawable.keeper_brand),
+                            contentDescription=null,modifier=Modifier.size(36.dp))
+                        Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
+                            Text("Image Keeper",
+                                style=MaterialTheme.typography.titleMedium,
+                                maxLines=1,overflow=TextOverflow.Ellipsis)
+                            Text("คลังภาพตามสาขา",
+                                style=MaterialTheme.typography.labelSmall,
+                                color=MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                },
+                actions={
+                    IconButton(
+                        onClick=viewModel::syncBranches,
+                        enabled=!uiState.isSyncing
+                    ) {
+                        if(uiState.isSyncing) CircularProgressIndicator(
+                            modifier=Modifier.size(20.dp),strokeWidth=2.dp
+                        ) else Icon(Icons.Rounded.Refresh,
+                            contentDescription="ซิงก์รายการสาขา")
+                    }
+                    IconButton(onClick=onOpenSettings) {
+                        Icon(Icons.Rounded.Settings,contentDescription="ตั้งค่า")
                     }
                 }
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAddBranch) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add branch")
+        floatingActionButton={
+            GlassFloatingActionButton(onClick=onAddBranch) {
+                Icon(Icons.Rounded.Add,contentDescription="เพิ่มสาขา")
             }
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { innerPadding ->
+        snackbarHost={SnackbarHost(hostState=snackbarHostState)}
+    ) {innerPadding->
         BranchListContent(
-            uiState = uiState,
-            modifier = Modifier.padding(innerPadding),
-            onSearchChange = viewModel::updateSearch,
-            onAccountFilterChange = viewModel::updateAccountFilter,
-            onSortChange = viewModel::updateSortOption,
-            onOnlyWithPhotosChange = viewModel::updateOnlyWithPhotos,
-            onBranchClick = onOpenBranch
+            uiState=uiState,modifier=Modifier.padding(innerPadding),
+            onSearchChange=viewModel::updateSearch,
+            onAccountFilterChange=viewModel::updateAccountFilter,
+            onSortChange=viewModel::updateSortOption,
+            onOnlyWithPhotosChange=viewModel::updateOnlyWithPhotos,
+            onBranchClick=onOpenBranch
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BranchListContent(
-    uiState: com.branchphotovault.ui.viewmodel.BranchListUiState,
-    modifier: Modifier = Modifier,
-    onSearchChange: (String) -> Unit,
-    onAccountFilterChange: (String?) -> Unit,
-    onSortChange: (BranchSortOption) -> Unit,
-    onOnlyWithPhotosChange: (Boolean) -> Unit,
-    onBranchClick: (account: String, branchCode: String) -> Unit
+    uiState:BranchListUiState,
+    modifier:Modifier=Modifier,
+    onSearchChange:(String)->Unit,
+    onAccountFilterChange:(String?)->Unit,
+    onSortChange:(BranchSortOption)->Unit,
+    onOnlyWithPhotosChange:(Boolean)->Unit,
+    onBranchClick:(account:String,branchCode:String)->Unit
 ) {
-    var accountExpanded by remember { mutableStateOf(false) }
-    var sortExpanded by remember { mutableStateOf(false) }
+    var accountExpanded by remember {mutableStateOf(false)}
+    var sortExpanded by remember {mutableStateOf(false)}
+    val context=LocalContext.current
+    val isFiltered=uiState.searchText.isNotBlank() ||
+        uiState.selectedAccount!=null || uiState.onlyWithPhotos
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier=modifier.fillMaxSize(),
+        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=12.dp,bottom=88.dp),
+        verticalArrangement=Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(checked=uiState.onlyWithPhotos,onCheckedChange=onOnlyWithPhotosChange,
-                        modifier=Modifier.semantics { contentDescription="เฉพาะร้านที่มีภาพ" })
-                    Text("เฉพาะร้านที่มีภาพ",style=MaterialTheme.typography.bodySmall,
-                        modifier=Modifier.clickable { onOnlyWithPhotosChange(!uiState.onlyWithPhotos) })
-                }
+            Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 GlassSearchBar(
-                    value = uiState.searchText,
-                    onValueChange = onSearchChange,
-                    modifier = Modifier.fillMaxWidth()
+                    value=uiState.searchText,
+                    onValueChange=onSearchChange,
+                    modifier=Modifier.fillMaxWidth()
                 )
+
+                Row(Modifier.fillMaxWidth(),
+                    horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        GlassDropdown(
+                            value=uiState.selectedAccount ?: "ทุก Account",
+                            label="Account",onClick={accountExpanded=true}
+                        )
+                        DropdownMenu(expanded=accountExpanded,
+                            onDismissRequest={accountExpanded=false}) {
+                            DropdownMenuItem(text={Text("ทุก Account")},onClick={
+                                onAccountFilterChange(null)
+                                accountExpanded=false
+                            })
+                            AddBranchViewModel.ACCOUNTS.forEach {account->
+                                DropdownMenuItem(text={Text(account)},onClick={
+                                    onAccountFilterChange(account)
+                                    accountExpanded=false
+                                })
+                            }
+                        }
+                    }
+                    Box(Modifier.weight(1f)) {
+                        GlassDropdown(value=uiState.sortOption.label,
+                            label="จัดเรียง",onClick={sortExpanded=true})
+                        DropdownMenu(expanded=sortExpanded,
+                            onDismissRequest={sortExpanded=false}) {
+                            BranchSortOption.entries.forEach {option->
+                                DropdownMenuItem(text={Text(option.label)},onClick={
+                                    onSortChange(option)
+                                    sortExpanded=false
+                                })
+                            }
+                        }
+                    }
+                }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier=Modifier.fillMaxWidth(),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.SpaceBetween
                 ) {
-                    Box(Modifier.weight(1f)) {
-                        GlassDropdown(
-                            value = uiState.selectedAccount ?: "All Accounts",
-                            label = "Account",
-                            onClick = { accountExpanded = !accountExpanded }
-                        )
-                        DropdownMenu(
-                            expanded = accountExpanded,
-                            onDismissRequest = { accountExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("All Accounts") },
-                                onClick = {
-                                    onAccountFilterChange(null)
-                                    accountExpanded = false
-                                }
-                            )
-                            AddBranchViewModel.ACCOUNTS.forEach { account ->
-                                DropdownMenuItem(
-                                    text = { Text(account) },
-                                    onClick = {
-                                        onAccountFilterChange(account)
-                                        accountExpanded = false
-                                    }
-                                )
-                            }
+                    Row(
+                        verticalAlignment=Alignment.CenterVertically,
+                        modifier=Modifier.clickable {
+                            onOnlyWithPhotosChange(!uiState.onlyWithPhotos)
                         }
-                    }
-                    Box(Modifier.weight(1f)) {
-                        GlassDropdown(
-                            value = uiState.sortOption.label,
-                            label = "จัดเรียง",
-                            onClick = { sortExpanded = !sortExpanded }
-                        )
-                        DropdownMenu(
-                            expanded = sortExpanded,
-                            onDismissRequest = { sortExpanded = false }
-                        ) {
-                            BranchSortOption.entries.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.label) },
-                                    onClick = {
-                                        onSortChange(option)
-                                        sortExpanded = false
-                                    }
-                                )
+                    ) {
+                        Checkbox(
+                            checked=uiState.onlyWithPhotos,
+                            onCheckedChange=onOnlyWithPhotosChange,
+                            modifier=Modifier.semantics {
+                                contentDescription="เฉพาะสาขาที่มีรูป"
                             }
-                        }
+                        )
+                        Text("เฉพาะสาขาที่มีรูป",
+                            style=MaterialTheme.typography.bodySmall)
                     }
+                    Text(
+                        "${uiState.branches.size} สาขา",
+                        style=MaterialTheme.typography.labelMedium,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-
-                val lastSyncText = uiState.lastSyncAt?.let {
-                    DateFormat.getMediumDateFormat(androidx.compose.ui.platform.LocalContext.current)
-                        .format(Date(it)) + " " + DateFormat.getTimeFormat(androidx.compose.ui.platform.LocalContext.current)
-                        .format(Date(it))
-                } ?: "Never"
-
+                val lastSyncText=uiState.lastSyncAt?.let {
+                    DateFormat.getMediumDateFormat(context).format(Date(it))+" · "+
+                        DateFormat.getTimeFormat(context).format(Date(it))
+                } ?: "ยังไม่เคยซิงก์"
                 Text(
-                    text = "Last sync: $lastSyncText",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "ซิงก์ล่าสุด $lastSyncText",
+                    style=MaterialTheme.typography.labelSmall,
+                    color=MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        if (uiState.branches.isEmpty()) {
+        if(uiState.branches.isEmpty()) {
             item {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier=Modifier.fillMaxWidth()
+                        .padding(top=64.dp,bottom=40.dp),
+                    horizontalAlignment=Alignment.CenterHorizontally,
+                    verticalArrangement=Arrangement.spacedBy(12.dp)
                 ) {
+                    Box(
+                        Modifier.size(64.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(16.dp)),
+                        contentAlignment=Alignment.Center
+                    ) {
+                        Icon(Icons.Outlined.PhotoLibrary,contentDescription=null,
+                            modifier=Modifier.size(28.dp),
+                            tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Text(
-                        text = "No branches found",
-                        style = MaterialTheme.typography.titleMedium
+                        if(isFiltered) "ไม่พบสาขาที่ตรงกับตัวกรอง"
+                        else "ยังไม่มีสาขาในรายการ",
+                        style=MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Sync the sheet or try a different search.",
-                        style = MaterialTheme.typography.bodyMedium
+                        if(isFiltered) "ลองเปลี่ยนคำค้นหาหรือตัวกรอง"
+                        else "กดซิงก์ด้านบนเพื่อโหลดรายชื่อสาขา",
+                        style=MaterialTheme.typography.bodyMedium,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-        } else {
-            items(
-                items = uiState.branches,
-                key = { "${it.account}_${it.branchCode}" }
-            ) { branch ->
+        }else{
+            items(uiState.branches,
+                key={"${it.account}_${it.branchCode}"}) {branch->
                 BranchListItemCard(
-                    branch = branch,
-                    onClick = { onBranchClick(branch.account, branch.branchCode) }
+                    branch=branch,
+                    onClick={onBranchClick(branch.account,branch.branchCode)}
                 )
             }
         }
-
-        item { Spacer(modifier = Modifier.height(80.dp)) }
     }
 }

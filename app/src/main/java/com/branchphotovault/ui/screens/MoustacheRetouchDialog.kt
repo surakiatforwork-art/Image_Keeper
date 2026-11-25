@@ -7,7 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -132,17 +132,17 @@ internal fun MoustacheRetouchDialog(photo:PhotoEntity,dismiss:()->Unit) {
         sheetState=sheetState,
         onDismissRequest={if(!busy)dismiss()},
         containerColor=MaterialTheme.colorScheme.surface.copy(alpha=.98f),
-        shape=RoundedCornerShape(topStart=32.dp,topEnd=32.dp)
+        shape=RoundedCornerShape(topStart=20.dp,topEnd=20.dp)
     ) {
         // Photo never scrolls out when manual tools are expanded. All advanced
         // model settings were removed; processing begins on the primary tap.
         Column(Modifier.fillMaxWidth()
             .height((screenHeightDp*.86f).dp)
             .navigationBarsPadding().padding(horizontal=16.dp).padding(bottom=8.dp),
-            verticalArrangement=Arrangement.spacedBy(5.dp)) {
+            verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                Icon(Icons.Outlined.AutoAwesome,null,
+                Icon(Icons.Outlined.Edit,null,
                     tint=MaterialTheme.colorScheme.primary)
                 Text("ลบหนวดและเคราด้วย AI",
                     style=MaterialTheme.typography.titleLarge)

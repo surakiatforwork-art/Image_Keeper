@@ -230,7 +230,7 @@ fun BranchPreviewScreen(
         },
         bottomBar = {
             if (uiState.selectedPhotoIds.isEmpty()) {
-                Surface(color = Color.Transparent,modifier=Modifier.padding(horizontal=12.dp,vertical=6.dp).clip(RoundedCornerShape(28.dp)).background(glassBrush())) {
+                Surface(color = MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(16.dp),modifier=Modifier.padding(horizontal=12.dp,vertical=8.dp)) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -286,7 +286,7 @@ fun BranchPreviewScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
@@ -344,9 +344,9 @@ fun BranchPreviewScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("No photos yet", style = MaterialTheme.typography.titleMedium)
+                        Text("ยังไม่มีภาพในสาขานี้", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Capture or import images to build the branch vault.",
+                            "ถ่ายภาพหรือนำเข้ารูปเพื่อเก็บไว้ในสาขานี้",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }

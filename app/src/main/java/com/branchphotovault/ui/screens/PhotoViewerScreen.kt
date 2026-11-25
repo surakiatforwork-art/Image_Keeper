@@ -44,7 +44,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
@@ -193,7 +193,7 @@ fun PhotoViewerScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No photos found")
+                Text("ไม่พบภาพถ่าย")
             }
         } else {
             BoxWithConstraints(Modifier.fillMaxSize().padding(innerPadding)) {
@@ -209,7 +209,7 @@ fun PhotoViewerScreen(
                     key = { uiState.photos[it].id },
                     userScrollEnabled = !activeZoomed,
                     modifier = (if(scrollLayout) Modifier.height(300.dp) else Modifier.weight(1f))
-                        .fillMaxWidth().padding(horizontal=16.dp).clip(RoundedCornerShape(24.dp))
+                        .fillMaxWidth().padding(horizontal=16.dp).clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surface.copy(alpha=.4f))
                 ) { page ->
                     val photo = uiState.photos[page]
@@ -257,7 +257,7 @@ fun PhotoViewerScreen(
                             enabled = !uiState.isDeleting && !uiState.isSavingToGallery,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Outlined.AutoAwesome,null,Modifier.size(20.dp),tint=MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Outlined.Edit,null,Modifier.size(20.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.width(8.dp))
                             Text("แต่งภาพ · หนวดและเครา")
                         }
@@ -312,7 +312,7 @@ fun PhotoViewerScreen(
                                 }
                                 Text("${photo.account} • ${photo.branchCode}",style=MaterialTheme.typography.bodySmall)
                                 Text(
-                                    "Captured: ${
+                                    "บันทึกเมื่อ ${
                                         DateFormat.getMediumDateFormat(context).format(Date(photo.createdAt))
                                     } ${
                                         DateFormat.getTimeFormat(context).format(Date(photo.createdAt))

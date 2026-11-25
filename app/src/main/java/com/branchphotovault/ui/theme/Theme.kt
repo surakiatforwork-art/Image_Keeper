@@ -15,34 +15,43 @@ import androidx.compose.ui.unit.dp
 
 private val LightColors = lightColorScheme(
     primary = VaultGreen,
+    onPrimary = Color.White,
     secondary = MossGreen,
+    onSecondary = Color.White,
     tertiary = Amber,
-    background = Cream,
-    surface = CardWhite,
-    surfaceVariant = Mist,
-    outline = MintOutline,
-    onSurfaceVariant = MossGreen,
-    onPrimary = Cream,
-    onSecondary = Cream,
     onTertiary = Slate,
+    background = Cream,
     onBackground = Slate,
+    surface = CardWhite,
     onSurface = Slate,
+    surfaceVariant = Mist,
+    onSurfaceVariant = MossGreen,
+    outline = MintOutline,
     error = Danger
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFA68AF6), onPrimary = Color(0xFF19172B),
-    secondary = Color(0xFFC4B9E2), background = Color(0xFF10111D),
-    surface = Color(0xFF25243A), surfaceVariant = Color(0xFF302D47),
-    onSurface = Color(0xFFF5F3FF), onBackground = Color(0xFFF5F3FF),
-    onSurfaceVariant = Color(0xFFA7A4BE), outline = Color(0xFF625A7C), error = Color(0xFFFF9BA9))
+    primary = Color(0xFF82D5B8),
+    onPrimary = Color(0xFF10251E),
+    secondary = Color(0xFFA2B7AB),
+    onSecondary = Color(0xFF18271F),
+    tertiary = Color(0xFFE0B77D),
+    background = Color(0xFF111716),
+    onBackground = Color(0xFFEAF0EC),
+    surface = Color(0xFF1B2321),
+    onSurface = Color(0xFFEAF0EC),
+    surfaceVariant = Color(0xFF27312D),
+    onSurfaceVariant = Color(0xFFAFBDB5),
+    outline = Color(0xFF394840),
+    error = Color(0xFFFFA3A8)
+)
 
 private val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(12.dp),
-    small = RoundedCornerShape(16.dp),
-    medium = RoundedCornerShape(22.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(20.dp)
 )
 
 @Composable

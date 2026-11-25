@@ -112,9 +112,17 @@ internal fun PhotoTransferCard() {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("นำเข้า / ส่งออกรูป", style = MaterialTheme.typography.titleMedium)
-            Text("ไฟล์ Keeper ZIP เก็บภาพพร้อมข้อมูลสาขาและวันที่ เว้นวันที่ว่างและเลือกร้านทั้งหมดเพื่อถ่ายโอนทุกรูป")
-            OutlinedTextField(from, { from = it }, label = { Text("วันเริ่ม YYYY-MM-DD") }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(through, { through = it }, label = { Text("วันสิ้นสุด YYYY-MM-DD") }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+            Text("เก็บภาพและข้อมูลสาขาเป็นไฟล์ ZIP · เว้นตัวกรองว่างเพื่อใช้ทุกรูป",
+                style=MaterialTheme.typography.bodySmall,
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(from, { from = it },
+                    label = { Text("ตั้งแต่") },placeholder={Text("YYYY-MM-DD")},
+                    singleLine=true,enabled=!busy,modifier=Modifier.weight(1f))
+                OutlinedTextField(through, { through = it },
+                    label = { Text("ถึง") },placeholder={Text("YYYY-MM-DD")},
+                    singleLine=true,enabled=!busy,modifier=Modifier.weight(1f))
+            }
             Box {
                 OutlinedButton(enabled = !busy, onClick = {
                     scope.launch {
@@ -140,7 +148,9 @@ internal fun PhotoTransferCard() {
                 }) { Text("นำเข้า ZIP") }
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (status.isNotEmpty()) Text(status)
+            if (status.isNotEmpty()) Text(status,
+                style=MaterialTheme.typography.bodySmall,
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

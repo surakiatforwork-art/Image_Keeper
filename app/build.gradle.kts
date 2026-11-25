@@ -14,8 +14,8 @@ android {
         applicationId = "com.branchphotovault"
         minSdk = 26
         targetSdk = 35
-        versionCode = 49
-        versionName = "1.4.0-beta.31-SmartShaveLipContinuity-Private"
+        versionCode = 50
+        versionName = "1.4.0-beta.32-ImageKeeperUnslop-Private"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

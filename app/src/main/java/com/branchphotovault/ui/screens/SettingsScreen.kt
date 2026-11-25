@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import com.branchphotovault.ui.components.GlassButton as Button
+import com.branchphotovault.ui.components.GlassSecondaryButton as SecondaryButton
 import com.branchphotovault.ui.components.GlassCard as Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,7 +57,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("ตั้งค่า") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -71,8 +72,8 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .imePadding()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal=16.dp,vertical=16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             PhotoTransferCard()
@@ -80,35 +81,39 @@ fun SettingsScreen(
                 value = uiState.baseUrl,
                 onValueChange = viewModel::updateBaseUrl,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Apps Script URL") },
-                supportingText = { Text("Edit the full web app URL here.") }
+                label = { Text("การเชื่อมต่อ Apps Script") },
+                supportingText = { Text("ที่อยู่เว็บแอปสำหรับซิงก์ข้อมูลสาขา") },
+                singleLine = true
             )
             OutlinedTextField(
                 value = uiState.retentionMonths.toString(),
                 onValueChange = viewModel::updateRetentionMonths,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Retention Months") },
-                supportingText = { Text("Default cleanup target is 3 months.") },
+                label = { Text("ระยะเวลาเก็บภาพ (เดือน)") },
+                supportingText = { Text("ค่าเริ่มต้น 3 เดือน") },
                 singleLine = true
             )
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("โฟลเดอร์แกลเลอรี่",style=androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                    Text("Pictures/Image Keeper")
-                    Text("ชื่อไฟล์: Account_เลขสาขา_วันเวลาบันทึก_รหัสไม่ซ้ำ.jpg")
+                    Text("Pictures/Image Keeper",style=androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color=androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("ชื่อไฟล์: Account_เลขสาขา_วันเวลาบันทึก_รหัสไม่ซ้ำ.jpg",
+                        style=androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        color=androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             SettingsChoiceCard(
-                title = "Saved Image Size",
-                supportingText = "Applied to new photos captured or imported into the app.",
+                title = "ขนาดภาพที่บันทึก",
+                supportingText = "มีผลกับภาพที่ถ่ายหรือนำเข้าใหม่",
                 options = ImageSizeOption.entries.toList(),
                 selectedOption = uiState.imageSizeOption,
                 optionLabel = { it.label },
                 onOptionSelected = viewModel::updateImageSizeOption
             )
             SettingsChoiceCard(
-                title = "Saved Image Aspect Ratio",
-                supportingText = "New photos are center-cropped before saving. Gallery save uses the processed result.",
+                title = "อัตราส่วนภาพที่บันทึก",
+                supportingText = "ภาพใหม่จะถูกครอปจากกึ่งกลางก่อนบันทึก",
                 options = ImageAspectRatioOption.entries.toList(),
                 selectedOption = uiState.imageAspectRatioOption,
                 optionLabel = { it.label },
@@ -122,10 +127,10 @@ fun SettingsScreen(
                 if (uiState.isSaving) {
                     CircularProgressIndicator(strokeWidth = 2.dp)
                 } else {
-                    Text("Save Settings")
+                    Text("บันทึกการตั้งค่า")
                 }
             }
-            Button(
+            SecondaryButton(
                 onClick = viewModel::checkApi,
                 enabled = !uiState.isCheckingApi,
                 modifier = Modifier.fillMaxWidth()
@@ -133,10 +138,10 @@ fun SettingsScreen(
                 if (uiState.isCheckingApi) {
                     CircularProgressIndicator(strokeWidth = 2.dp)
                 } else {
-                    Text("Run API Health Check")
+                    Text("ตรวจสอบการเชื่อมต่อ")
                 }
             }
-            Button(
+            SecondaryButton(
                 onClick = viewModel::cleanupExpiredPhotos,
                 enabled = !uiState.isCleaningUp,
                 modifier = Modifier.fillMaxWidth()
@@ -144,7 +149,7 @@ fun SettingsScreen(
                 if (uiState.isCleaningUp) {
                     CircularProgressIndicator(strokeWidth = 2.dp)
                 } else {
-                    Text("Cleanup Expired Photos")
+                    Text("ล้างภาพที่หมดอายุ")
                 }
             }
         }
@@ -166,8 +171,10 @@ private fun <T> SettingsChoiceCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = title)
-                Text(text = supportingText)
+                Text(text = title,style=androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                Text(text = supportingText,
+                    style=androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    color=androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
             }
             options.forEach { option ->
                 Row(
