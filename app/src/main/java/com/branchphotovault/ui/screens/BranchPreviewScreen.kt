@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -73,6 +74,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.ui.components.ExportProgressCard
+import com.branchphotovault.ui.components.BranchGalleryControls
+import com.branchphotovault.ui.components.BranchPhotoListItem
+import com.branchphotovault.data.repository.GalleryLayout
+import com.branchphotovault.data.repository.GalleryPhotoSort
 import com.branchphotovault.ui.components.RouteBadge
 import com.branchphotovault.ui.viewmodel.BranchPreviewViewModel
 import kotlinx.coroutines.launch
@@ -90,6 +95,16 @@ fun BranchPreviewScreen(
     onCapturedPathConsumed: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val galleryViewConfig by viewModel.galleryViewConfig.collectAsStateWithLifecycle()
+    // Purely visual sorting: selection/export order stays as explicitly tapped.
+    val visiblePhotos = remember(uiState.photos, galleryViewConfig.sort) {
+        when (galleryViewConfig.sort) {
+            GalleryPhotoSort.NEWEST_FIRST ->
+                uiState.photos.sortedWith(compareByDescending<PhotoEntity> { it.createdAt }.thenBy { it.id })
+            GalleryPhotoSort.OLDEST_FIRST ->
+                uiState.photos.sortedWith(compareBy<PhotoEntity> { it.createdAt }.thenBy { it.id })
+        }
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val saveWithPermission = rememberGallerySavePermission {
@@ -271,13 +286,17 @@ fun BranchPreviewScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(
+                if (galleryViewConfig.layout == GalleryLayout.LIST) 1 else galleryViewConfig.columns
+            ),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(
+                if (galleryViewConfig.layout == GalleryLayout.LIST) 8.dp else 4.dp
+            )
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -320,6 +339,14 @@ fun BranchPreviewScreen(
                         }
                     }
 
+                    BranchGalleryControls(
+                        config = galleryViewConfig,
+                        onLayoutChange = viewModel::setGalleryLayout,
+                        onColumnsChange = viewModel::setGalleryColumns,
+                        onSortChange = viewModel::setGallerySort,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     uiState.exportProgress?.let { exportProgress ->
                         ExportProgressCard(progress = exportProgress)
                     }
@@ -352,20 +379,34 @@ fun BranchPreviewScreen(
                     }
                 }
             } else {
-                items(uiState.photos, key = { it.id }) { photo ->
-                    PhotoGridItem(
-                        photo = photo,
-                        isSelected = photo.id in uiState.selectedPhotoIds,
-                        selectionActive = uiState.selectedPhotoIds.isNotEmpty(),
-                        onClick = {
-                            if (uiState.selectedPhotoIds.isNotEmpty()) {
-                                viewModel.toggleSelection(photo.id)
-                            } else {
-                                onOpenPhoto(photo.id)
-                            }
-                        },
-                        onLongClick = { viewModel.toggleSelection(photo.id) }
-                    )
+                items(visiblePhotos, key = { it.id }) { photo ->
+                    val isSelected = photo.id in uiState.selectedPhotoIds
+                    val onPhotoClick: () -> Unit = {
+                        if (uiState.selectedPhotoIds.isNotEmpty()) {
+                            viewModel.toggleSelection(photo.id)
+                        } else {
+                            onOpenPhoto(photo.id)
+                        }
+                    }
+                    val onPhotoLongClick: () -> Unit = { viewModel.toggleSelection(photo.id) }
+                    if (galleryViewConfig.layout == GalleryLayout.LIST) {
+                        BranchPhotoListItem(
+                            photo = photo,
+                            selected = isSelected,
+                            selectionActive = uiState.selectedPhotoIds.isNotEmpty(),
+                            onClick = onPhotoClick,
+                            onLongClick = onPhotoLongClick
+                        )
+                    } else {
+                        PhotoGridItem(
+                            photo = photo,
+                            isSelected = isSelected,
+                            selectionActive = uiState.selectedPhotoIds.isNotEmpty(),
+                            onClick = onPhotoClick,
+                            onLongClick = onPhotoLongClick,
+                            compact = galleryViewConfig.columns >= 5
+                        )
+                    }
                 }
             }
         }
@@ -379,7 +420,8 @@ private fun PhotoGridItem(
     isSelected: Boolean,
     selectionActive: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    compact: Boolean
 ) {
     Box(
         modifier = Modifier
@@ -411,7 +453,8 @@ private fun PhotoGridItem(
                 tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(8.dp)
+                    .padding(if (compact) 3.dp else 8.dp)
+                    .size(if (compact) 20.dp else 24.dp)
             )
         }
     }

@@ -11,6 +11,10 @@ import com.branchphotovault.data.local.PhotoEntity
 import com.branchphotovault.data.model.ExportProgress
 import com.branchphotovault.data.repository.BranchRepository
 import com.branchphotovault.data.repository.PhotoRepository
+import com.branchphotovault.data.repository.GalleryLayout
+import com.branchphotovault.data.repository.GalleryPhotoSort
+import com.branchphotovault.data.repository.GalleryViewConfig
+import com.branchphotovault.data.repository.GalleryViewPreferences
 import com.branchphotovault.integration.GhostShiftSender
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +37,7 @@ data class BranchPreviewUiState(
 class BranchPreviewViewModel(
     private val branchRepository: BranchRepository,
     private val photoRepository: PhotoRepository,
-    @Suppress("unused") workManagerContext: Context,
+    workManagerContext: Context,
     private val account: String,
     private val branchCode: String
 ) : ViewModel() {
@@ -49,6 +53,30 @@ class BranchPreviewViewModel(
         val exportProgress: ExportProgress?,
         val message: String?
     )
+
+    private val galleryViewPreferences = GalleryViewPreferences(workManagerContext)
+    private val _galleryViewConfig = MutableStateFlow(
+        galleryViewPreferences.load(account, branchCode)
+    )
+    val galleryViewConfig: StateFlow<GalleryViewConfig> = _galleryViewConfig
+
+    fun setGalleryLayout(layout: GalleryLayout) = saveGalleryConfig(
+        _galleryViewConfig.value.copy(layout = layout)
+    )
+
+    fun setGalleryColumns(columns: Int) = saveGalleryConfig(
+        _galleryViewConfig.value.copy(columns = columns.coerceIn(3, 6), layout = GalleryLayout.GRID)
+    )
+
+    fun setGallerySort(sort: GalleryPhotoSort) = saveGalleryConfig(
+        _galleryViewConfig.value.copy(sort = sort)
+    )
+
+    private fun saveGalleryConfig(config: GalleryViewConfig) {
+        if (config == _galleryViewConfig.value) return
+        _galleryViewConfig.value = config
+        galleryViewPreferences.save(account, branchCode, config)
+    }
 
     // A list intentionally preserves the order in which the user selected photos.
     private val selectedPhotoIds = MutableStateFlow<List<String>>(emptyList())
