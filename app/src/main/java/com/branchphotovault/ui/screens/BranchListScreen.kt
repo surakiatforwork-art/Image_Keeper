@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
@@ -111,6 +112,7 @@ private fun GalleryRibbonHeader(
     onSync: () -> Unit,
     onSettings: () -> Unit
 ) {
+    var overflowExpanded by remember { mutableStateOf(false) }
     val gradient = if (dark) {
         listOf(Color(0xFF1D1C4D), Color(0xFF353075), Color(0xFF5936A4))
     } else {
@@ -156,15 +158,46 @@ private fun GalleryRibbonHeader(
                 Text("Branch Photo Vault", style=MaterialTheme.typography.bodySmall,
                     color=Color.White.copy(alpha=.85f))
             }
-            IconButton(onClick=onSync,enabled=!syncing) {
-                if(syncing) CircularProgressIndicator(Modifier.size(22.dp),
-                    color=Color.White,strokeWidth=2.dp)
-                else Icon(Icons.Rounded.Refresh,contentDescription="ซิงก์รายการสาขา",
-                    tint=Color.White,modifier=Modifier.size(28.dp))
-            }
-            IconButton(onClick=onSettings) {
-                Icon(Icons.Rounded.Settings,contentDescription="ตั้งค่า",
-                    tint=Color.White,modifier=Modifier.size(27.dp))
+            // Both legacy header actions live in one 3-dot overflow menu.
+            Box {
+                IconButton(onClick={overflowExpanded=true}) {
+                    Icon(
+                        Icons.Rounded.MoreVert,
+                        contentDescription="เมนูเพิ่มเติม",
+                        tint=Color.White,
+                        modifier=Modifier.size(29.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded=overflowExpanded,
+                    onDismissRequest={overflowExpanded=false}
+                ) {
+                    DropdownMenuItem(
+                        text={Text(if(syncing) "กำลังรีเฟรช..." else "รีเฟรชรายการสาขา")},
+                        leadingIcon={
+                            if(syncing) {
+                                CircularProgressIndicator(
+                                    modifier=Modifier.size(21.dp), strokeWidth=2.dp
+                                )
+                            } else {
+                                Icon(Icons.Rounded.Refresh,contentDescription=null)
+                            }
+                        },
+                        enabled=!syncing,
+                        onClick={
+                            overflowExpanded=false
+                            onSync()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text={Text("ตั้งค่า")},
+                        leadingIcon={Icon(Icons.Rounded.Settings,contentDescription=null)},
+                        onClick={
+                            overflowExpanded=false
+                            onSettings()
+                        }
+                    )
+                }
             }
         }
     }
