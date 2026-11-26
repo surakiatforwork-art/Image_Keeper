@@ -236,7 +236,14 @@ fun GlassSearchBar(
     value: String,onValueChange: (String) -> Unit,modifier: Modifier = Modifier
 ) {
     val keyboard=LocalSoftwareKeyboardController.current
-    val shape=RoundedCornerShape(12.dp)
+    val shape=RoundedCornerShape(27.dp)
+    val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < .35f
+    val fill = if (dark) {
+        Brush.horizontalGradient(listOf(Color(0xFF2F305D), Color(0xFF28294F)))
+    } else {
+        Brush.horizontalGradient(listOf(Color.White, Color(0xFFF5F3FF)))
+    }
     BasicTextField(
         value,onValueChange,
         singleLine=true,
@@ -246,12 +253,12 @@ fun GlassSearchBar(
         cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),
         keyboardActions=KeyboardActions(onSearch={keyboard?.hide()}),
-        modifier=modifier.heightIn(min=52.dp)
-            .clip(shape).background(MaterialTheme.colorScheme.surface)
-            .border(.8.dp,glassBorder(),shape),
+        modifier=modifier.heightIn(min=58.dp)
+            .clip(shape).background(fill)
+            .border(1.dp,if(dark) Color(0xFF656394) else Color(0xFFD7D0F4),shape),
         decorationBox={field->
             Row(
-                Modifier.fillMaxWidth().heightIn(min=52.dp).padding(start=16.dp),
+                Modifier.fillMaxWidth().heightIn(min=58.dp).padding(start=17.dp),
                 verticalAlignment=Alignment.CenterVertically
             ) {
                 Icon(Icons.Outlined.Search,null,Modifier.size(20.dp),
@@ -280,13 +287,20 @@ fun GlassSearchBar(
 fun GlassDropdown(
     label: String,value: String,onClick: () -> Unit,modifier: Modifier = Modifier
 ) {
-    val shape=RoundedCornerShape(12.dp)
+    val shape=RoundedCornerShape(16.dp)
+    val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < .35f
+    val fill = if(dark) {
+        Brush.horizontalGradient(listOf(Color(0xFF2F305D),Color(0xFF28294F)))
+    } else {
+        Brush.horizontalGradient(listOf(Color.White,Color(0xFFF8F6FF)))
+    }
     Row(
         modifier.fillMaxWidth().clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(.8.dp,glassBorder(),shape)
+            .background(fill)
+            .border(1.dp,if(dark) Color(0xFF656394) else Color(0xFFD9D2F5),shape)
             .clickable(role=Role.Button,onClick=onClick)
-            .heightIn(min=56.dp).padding(horizontal=12.dp,vertical=8.dp),
+            .heightIn(min=66.dp).padding(horizontal=13.dp,vertical=9.dp),
         verticalAlignment=Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
