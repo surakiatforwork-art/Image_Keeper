@@ -4,12 +4,14 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.rounded.Add
@@ -25,6 +27,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -52,6 +56,8 @@ fun BranchListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val dark = MaterialTheme.colorScheme.background.luminance() < .35f
+    val density = LocalDensity.current
+    val keyboardVisible = WindowInsets.ime.getBottom(density) > 0
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
         snackbar.showSnackbar(message)
@@ -70,13 +76,21 @@ fun BranchListScreen(
                     onSettings = onOpenSettings
                 )
             },
-            floatingActionButton = { GalleryAddButton(onAddBranch) },
+            bottomBar = {
+                GallerySearchBottomBar(
+                    value = uiState.searchText,
+                    onValueChange = viewModel::updateSearch,
+                    dark = dark
+                )
+            },
+            floatingActionButton = {
+                if (!keyboardVisible) GalleryAddButton(onAddBranch)
+            },
             snackbarHost = { SnackbarHost(hostState = snackbar) }
         ) { padding ->
             BranchListContent(
                 uiState = uiState,
-                modifier = Modifier.padding(padding).offset(y = (-18).dp),
-                onSearchChange = viewModel::updateSearch,
+                modifier = Modifier.padding(padding),
                 onAccountFilterChange = viewModel::updateAccountFilter,
                 onSortChange = viewModel::updateSortOption,
                 onOnlyWithPhotosChange = viewModel::updateOnlyWithPhotos,
@@ -197,7 +211,6 @@ private fun GalleryAddButton(onClick: () -> Unit) {
 private fun BranchListContent(
     uiState: BranchListUiState,
     modifier: Modifier=Modifier,
-    onSearchChange: (String)->Unit,
     onAccountFilterChange: (String?)->Unit,
     onSortChange: (BranchSortOption)->Unit,
     onOnlyWithPhotosChange: (Boolean)->Unit,
@@ -212,21 +225,14 @@ private fun BranchListContent(
 
     LazyColumn(
         modifier=modifier.fillMaxSize(),
-        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=12.dp,bottom=100.dp),
-        verticalArrangement=Arrangement.spacedBy(14.dp)
+        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=15.dp,bottom=90.dp),
+        verticalArrangement=Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Column(verticalArrangement=Arrangement.spacedBy(15.dp)) {
-                Box(Modifier.shadow(7.dp,RoundedCornerShape(26.dp))) {
-                    GlassSearchBar(
-                        value=uiState.searchText,
-                        onValueChange=onSearchChange,
-                        modifier=Modifier.fillMaxWidth()
-                    )
-                }
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.weight(1f).shadow(4.dp,RoundedCornerShape(17.dp))) {
-                        GlassDropdown(
+            Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        CompactBranchFilter(
                             value=uiState.selectedAccount ?: "ทุก Account",
                             label="Account",onClick={accountExpanded=true}
                         )
@@ -241,9 +247,9 @@ private fun BranchListContent(
                             }
                         }
                     }
-                    Box(Modifier.weight(1f).shadow(4.dp,RoundedCornerShape(17.dp))) {
-                        GlassDropdown(value=uiState.sortOption.label,
-                            label="จัดเรียง",onClick={sortExpanded=true})
+                    Box(Modifier.weight(1f)) {
+                        CompactBranchFilter(value=uiState.sortOption.label,
+                            label="เรียง",onClick={sortExpanded=true})
                         DropdownMenu(expanded=sortExpanded,onDismissRequest={sortExpanded=false}) {
                             BranchSortOption.entries.forEach {option->
                                 DropdownMenuItem(text={Text(option.label)},onClick={
@@ -254,28 +260,21 @@ private fun BranchListContent(
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().padding(top=2.dp),
+                    Modifier.fillMaxWidth(),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.SpaceBetween
                 ) {
-                    Row(Modifier.clickable {onOnlyWithPhotosChange(!uiState.onlyWithPhotos)},
-                        verticalAlignment=Alignment.CenterVertically) {
-                        Checkbox(
-                            checked=uiState.onlyWithPhotos,
-                            onCheckedChange=onOnlyWithPhotosChange,
-                            modifier=Modifier.semantics {
-                                contentDescription="เฉพาะสาขาที่มีรูป"
-                            }
-                        )
-                        Text("เฉพาะสาขาที่มีรูป",style=MaterialTheme.typography.bodyMedium)
-                    }
+                    FilterWithPhotosChip(
+                        checked=uiState.onlyWithPhotos,
+                        onCheckedChange=onOnlyWithPhotosChange
+                    )
                     Text(
-                        "ทั้งหมด "+uiState.branches.size+" สาขา",
-                        style=MaterialTheme.typography.bodySmall,
+                        uiState.branches.size.toString()+" สาขา",
+                        style=MaterialTheme.typography.labelMedium,
                         color=scheme.onSurfaceVariant
                     )
                 }
-                Row(Modifier.fillMaxWidth().padding(top=8.dp),
+                Row(Modifier.fillMaxWidth().padding(top=4.dp),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                     Icon(Icons.Outlined.Storefront,contentDescription=null,
@@ -319,5 +318,97 @@ private fun BranchListContent(
                     onClick={onBranchClick(branch.account,branch.branchCode)})
             }
         }
+    }
+}
+
+
+/** Fixed search toolbar, placed above gesture navigation and the keyboard. */
+@Composable
+private fun GallerySearchBottomBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    dark: Boolean
+) {
+    val scheme = MaterialTheme.colorScheme
+    val line = if (dark) Color(0xFF4D447E) else Color(0xFFE2DAFA)
+    Surface(
+        color=if (dark) Color(0xFF211E40) else Color(0xFFF9F7FF),
+        shadowElevation=10.dp,
+        tonalElevation=0.dp
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .border(width=0.5.dp,color=line)
+                .navigationBarsPadding()
+                .padding(start=14.dp,end=14.dp,top=9.dp,bottom=9.dp)
+        ) {
+            GlassSearchBar(
+                value=value,
+                onValueChange=onValueChange,
+                modifier=Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+/** One-line 44dp filter controls in place of full-size 66dp cards. */
+@Composable
+private fun CompactBranchFilter(
+    value: String,
+    label: String,
+    onClick: () -> Unit
+) {
+    val scheme=MaterialTheme.colorScheme
+    val dark=scheme.background.luminance()<.35f
+    val shape=RoundedCornerShape(13.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(shape)
+            .background(if(dark) Color(0xFF2F2A54) else Color(0xFFF3F0FF))
+            .border(1.dp,if(dark) Color(0xFF61578D) else Color(0xFFE2D9F7),shape)
+            .clickable(role=Role.Button,onClick=onClick)
+            .heightIn(min=44.dp)
+            .padding(horizontal=12.dp,vertical=6.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(5.dp)
+    ) {
+        Text(label,style=MaterialTheme.typography.labelSmall,
+            color=scheme.onSurfaceVariant,maxLines=1)
+        Text(value,modifier=Modifier.weight(1f),
+            style=MaterialTheme.typography.labelMedium,
+            color=scheme.onSurface,maxLines=1,
+            overflow=TextOverflow.Ellipsis)
+        Icon(Icons.Outlined.KeyboardArrowDown,contentDescription=null,
+            modifier=Modifier.size(16.dp),tint=scheme.onSurfaceVariant)
+    }
+}
+
+/** A small tappable chip retains the existing boolean filter semantics. */
+@Composable
+private fun FilterWithPhotosChip(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val scheme=MaterialTheme.colorScheme
+    val shape=RoundedCornerShape(12.dp)
+    Row(
+        Modifier.clip(shape)
+            .background(if(checked) scheme.primaryContainer else scheme.surfaceVariant)
+            .clickable(role=Role.Checkbox,onClick={onCheckedChange(!checked)})
+            .heightIn(min=38.dp)
+            .padding(start=3.dp,end=12.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(0.dp)
+    ) {
+        Checkbox(
+            checked=checked,
+            onCheckedChange=onCheckedChange,
+            modifier=Modifier.size(36.dp).semantics {
+                contentDescription="เฉพาะสาขาที่มีรูป"
+            }
+        )
+        Text("มีรูปเท่านั้น",
+            style=MaterialTheme.typography.labelMedium,
+            color=if(checked) scheme.onPrimaryContainer else scheme.onSurfaceVariant)
     }
 }
