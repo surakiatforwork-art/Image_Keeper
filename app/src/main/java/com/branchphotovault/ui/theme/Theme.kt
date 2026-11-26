@@ -16,16 +16,16 @@ import androidx.compose.ui.unit.dp
 private val LightColors = lightColorScheme(
     primary = VaultGreen,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFDAF0FF),
-    onPrimaryContainer = Color(0xFF094269),
+    primaryContainer = Color(0xFFEAE3FF),
+    onPrimaryContainer = Color(0xFF38237B),
     secondary = MossGreen,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE7F2FA),
+    secondaryContainer = Color(0xFFECE8F8),
     onSecondaryContainer = Slate,
     tertiary = Amber,
-    onTertiary = Slate,
-    tertiaryContainer = Color(0xFFFFE6D9),
-    onTertiaryContainer = Color(0xFF773E28),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFDDF2FF),
+    onTertiaryContainer = Color(0xFF12446C),
     background = Cream,
     onBackground = Slate,
     surface = CardWhite,
@@ -33,28 +33,32 @@ private val LightColors = lightColorScheme(
     surfaceVariant = Mist,
     onSurfaceVariant = MossGreen,
     outline = MintOutline,
-    outlineVariant = Color(0xFFE2EDF5),
+    outlineVariant = Color(0xFFE9E4F5),
     error = Danger
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF73D8FF),
-    onPrimary = Color(0xFF063D5F),
-    primaryContainer = Color(0xFF0B527A),
-    onPrimaryContainer = Color(0xFFCBEFFF),
-    secondary = Color(0xFFB1CEDF),
-    onSecondary = Color(0xFF152B40),
-    tertiary = Color(0xFFFFAC8E),
-    onTertiary = Color(0xFF4B251B),
-    background = Color(0xFF0C1927),
-    onBackground = Color(0xFFEAF6FF),
-    surface = Color(0xFF182839),
-    onSurface = Color(0xFFEAF6FF),
-    surfaceVariant = Color(0xFF23394C),
-    onSurfaceVariant = Color(0xFFB4CBDD),
-    outline = Color(0xFF3A5266),
-    outlineVariant = Color(0xFF30485A),
-    error = Color(0xFFFFA3AC)
+    primary = Color(0xFFB49CFF),
+    onPrimary = Color(0xFF25124F),
+    primaryContainer = Color(0xFF30205F),
+    onPrimaryContainer = Color(0xFFF4ECFF),
+    secondary = Color(0xFFC6B9E4),
+    onSecondary = Color(0xFF251D3C),
+    secondaryContainer = Color(0xFF38304B),
+    onSecondaryContainer = Color(0xFFF4ECFF),
+    tertiary = Color(0xFF83D3FF),
+    onTertiary = Color(0xFF0A3050),
+    tertiaryContainer = Color(0xFF153A5B),
+    onTertiaryContainer = Color(0xFFDAF2FF),
+    background = Color(0xFF131329),
+    onBackground = Color(0xFFF1EDFF),
+    surface = Color(0xFF20203A),
+    onSurface = Color(0xFFF1EDFF),
+    surfaceVariant = Color(0xFF2A2948),
+    onSurfaceVariant = Color(0xFFCBC4E2),
+    outline = Color(0xFF514B75),
+    outlineVariant = Color(0xFF393456),
+    error = Color(0xFFFFA8BD)
 )
 
 private val AppShapes = Shapes(
@@ -74,7 +78,7 @@ fun BranchPhotoVaultTheme(
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window,view).apply {
-                // The toolbar is blue in light mode and deep navy-blue in dark mode:
+                // The toolbar is purple in light mode and deep indigo in dark mode:
                 // both need white status-bar glyphs; navigation follows theme contrast.
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = !darkTheme

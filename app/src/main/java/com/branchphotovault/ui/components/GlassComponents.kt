@@ -93,7 +93,7 @@ fun GlassToolbar(
 ) {
     val scheme=MaterialTheme.colorScheme
     val isDark = scheme.background.luminance() < 0.35f
-    // Dark palette: navy chrome with sky-blue content; light palette: blue with white content.
+    // Dark palette: deep indigo chrome; light palette: vivid purple with white content.
     val barColor = if (isDark) scheme.primaryContainer else scheme.primary
     val foreground = if (isDark) scheme.onPrimaryContainer else scheme.onPrimary
     TopAppBar(

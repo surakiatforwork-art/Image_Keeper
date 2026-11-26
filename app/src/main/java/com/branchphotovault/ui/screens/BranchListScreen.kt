@@ -60,15 +60,18 @@ fun BranchListScreen(
                         verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(12.dp)
                     ) {
-                        Image(painterResource(R.drawable.keeper_brand),
-                            contentDescription="Image Keeper",modifier=Modifier.size(40.dp))
+                        Image(
+                            painterResource(R.drawable.keeper_ghost_inapp),
+                            contentDescription="ผีน้อย Image Keeper",
+                            modifier = Modifier.size(42.dp)
+                        )
                         Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
                             Text("Image Keeper",
                                 style=MaterialTheme.typography.titleMedium,
                                 maxLines=1,overflow=TextOverflow.Ellipsis)
                             Text("Branch Photo Vault",
                                 style=MaterialTheme.typography.labelSmall,
-                                color=MaterialTheme.colorScheme.onPrimary.copy(alpha=.84f))
+                                color=androidx.compose.material3.LocalContentColor.current.copy(alpha=.82f))
                         }
                     }
                 },
