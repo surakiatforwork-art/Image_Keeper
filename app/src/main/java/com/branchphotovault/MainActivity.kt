@@ -35,6 +35,31 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    override fun onResume() {
+        super.onResume()
+        requestHighRefreshRate()
+    }
+
+    // This is a window-level preference, not a system setting. Match the current
+    // resolution and request up to 120 Hz; Android can still honor battery,
+    // thermal and user display restrictions. Older 60 Hz phones keep their mode.
+    @Suppress("DEPRECATION")
+    private fun requestHighRefreshRate() {
+        val display = if (android.os.Build.VERSION.SDK_INT >= 30) this.display
+            else windowManager.defaultDisplay
+        val current = display?.mode ?: return
+        val candidate = display.supportedModes
+            .filter { it.physicalWidth == current.physicalWidth &&
+                it.physicalHeight == current.physicalHeight && it.refreshRate <= 120.5f }
+            .maxByOrNull { it.refreshRate } ?: return
+        if (candidate.refreshRate <= 60.5f) return
+        val attributes = window.attributes
+        if (attributes.preferredDisplayModeId != candidate.modeId) {
+            attributes.preferredDisplayModeId = candidate.modeId
+            window.attributes = attributes
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
