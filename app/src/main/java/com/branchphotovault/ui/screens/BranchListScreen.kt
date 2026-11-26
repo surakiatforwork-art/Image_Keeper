@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Storefront
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -91,7 +94,8 @@ fun BranchListScreen(
             BranchListContent(
                 uiState = uiState,
                 modifier = Modifier.padding(padding),
-                onAccountFilterChange = viewModel::updateAccountFilter,
+                onToggleAccountFilter = viewModel::toggleAccountFilter,
+                onClearAccountFilters = viewModel::clearAccountFilters,
                 onSortChange = viewModel::updateSortOption,
                 onOnlyWithPhotosChange = viewModel::updateOnlyWithPhotos,
                 onBranchClick = onOpenBranch
@@ -211,7 +215,8 @@ private fun GalleryAddButton(onClick: () -> Unit) {
 private fun BranchListContent(
     uiState: BranchListUiState,
     modifier: Modifier=Modifier,
-    onAccountFilterChange: (String?)->Unit,
+    onToggleAccountFilter: (String)->Unit,
+    onClearAccountFilters: ()->Unit,
     onSortChange: (BranchSortOption)->Unit,
     onOnlyWithPhotosChange: (Boolean)->Unit,
     onBranchClick: (account:String,branchCode:String)->Unit
@@ -221,7 +226,7 @@ private fun BranchListContent(
     val context=LocalContext.current
     val scheme=MaterialTheme.colorScheme
     val filtered=uiState.searchText.isNotBlank() ||
-        uiState.selectedAccount!=null || uiState.onlyWithPhotos
+        uiState.selectedAccounts.isNotEmpty() || uiState.onlyWithPhotos
 
     LazyColumn(
         modifier=modifier.fillMaxSize(),
@@ -230,44 +235,83 @@ private fun BranchListContent(
     ) {
         item {
             Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f)) {
+                // 60% Filter | 30% Sort | 10% Photos only, all on one row.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement=Arrangement.spacedBy(4.dp),
+                    verticalAlignment=Alignment.CenterVertically
+                ) {
+                    Box(Modifier.weight(6f)) {
                         CompactBranchFilter(
-                            value=uiState.selectedAccount ?: "ทุก Account",
-                            label="Account",onClick={accountExpanded=true}
+                            value = when (uiState.selectedAccounts.size) {
+                                0 -> "ทุก Account"
+                                1 -> uiState.selectedAccounts.first()
+                                else -> "${uiState.selectedAccounts.size} Account"
+                            },
+                            label="Filter", onClick={accountExpanded=true},
+                            modifier=Modifier.fillMaxWidth()
                         )
-                        DropdownMenu(expanded=accountExpanded,onDismissRequest={accountExpanded=false}) {
-                            DropdownMenuItem(text={Text("ทุก Account")},onClick={
-                                onAccountFilterChange(null);accountExpanded=false
-                            })
-                            AddBranchViewModel.ACCOUNTS.forEach {account->
-                                DropdownMenuItem(text={Text(account)},onClick={
-                                    onAccountFilterChange(account);accountExpanded=false
-                                })
+                        DropdownMenu(
+                            expanded=accountExpanded,
+                            onDismissRequest={accountExpanded=false}
+                        ) {
+                            DropdownMenuItem(
+                                text={Text("ทุก Account")},
+                                leadingIcon={
+                                    Checkbox(
+                                        checked=uiState.selectedAccounts.isEmpty(),
+                                        onCheckedChange=null,
+                                        modifier=Modifier.size(28.dp)
+                                    )
+                                },
+                                onClick={onClearAccountFilters()}
+                            )
+                            HorizontalDivider()
+                            AddBranchViewModel.ACCOUNTS.forEach { account ->
+                                DropdownMenuItem(
+                                    text={Text(account)},
+                                    leadingIcon={
+                                        Checkbox(
+                                            checked=account in uiState.selectedAccounts,
+                                            onCheckedChange=null,
+                                            modifier=Modifier.size(28.dp)
+                                        )
+                                    },
+                                    onClick={onToggleAccountFilter(account)}
+                                )
                             }
                         }
                     }
-                    Box(Modifier.weight(1f)) {
-                        CompactBranchFilter(value=uiState.sortOption.label,
-                            label="เรียง",onClick={sortExpanded=true})
-                        DropdownMenu(expanded=sortExpanded,onDismissRequest={sortExpanded=false}) {
-                            BranchSortOption.entries.forEach {option->
-                                DropdownMenuItem(text={Text(option.label)},onClick={
-                                    onSortChange(option);sortExpanded=false
-                                })
+                    Box(Modifier.weight(3f)) {
+                        CompactBranchFilter(
+                            value=uiState.sortOption.label,
+                            label="Sort", onClick={sortExpanded=true},
+                            modifier=Modifier.fillMaxWidth(),
+                            short=true
+                        )
+                        DropdownMenu(
+                            expanded=sortExpanded,
+                            onDismissRequest={sortExpanded=false}
+                        ) {
+                            BranchSortOption.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text={Text(option.label)},
+                                    onClick={onSortChange(option); sortExpanded=false}
+                                )
                             }
                         }
+                    }
+                    Box(Modifier.weight(1f),contentAlignment=Alignment.Center) {
+                        PhotosOnlyCheckbox(
+                            checked=uiState.onlyWithPhotos,
+                            onCheckedChange=onOnlyWithPhotosChange
+                        )
                     }
                 }
                 Row(
                     Modifier.fillMaxWidth(),
-                    verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween
+                    horizontalArrangement=Arrangement.End
                 ) {
-                    FilterWithPhotosChip(
-                        checked=uiState.onlyWithPhotos,
-                        onCheckedChange=onOnlyWithPhotosChange
-                    )
                     Text(
                         uiState.branches.size.toString()+" สาขา",
                         style=MaterialTheme.typography.labelMedium,
@@ -356,24 +400,28 @@ private fun GallerySearchBottomBar(
 private fun CompactBranchFilter(
     value: String,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier=Modifier,
+    short: Boolean=false
 ) {
     val scheme=MaterialTheme.colorScheme
     val dark=scheme.background.luminance()<.35f
     val shape=RoundedCornerShape(13.dp)
     Row(
-        Modifier.fillMaxWidth()
+        modifier
             .clip(shape)
             .background(if(dark) Color(0xFF2F2A54) else Color(0xFFF3F0FF))
             .border(1.dp,if(dark) Color(0xFF61578D) else Color(0xFFE2D9F7),shape)
             .clickable(role=Role.Button,onClick=onClick)
             .heightIn(min=44.dp)
-            .padding(horizontal=12.dp,vertical=6.dp),
+            .padding(horizontal=if (short) 7.dp else 11.dp,vertical=6.dp),
         verticalAlignment=Alignment.CenterVertically,
-        horizontalArrangement=Arrangement.spacedBy(5.dp)
+        horizontalArrangement=Arrangement.spacedBy(4.dp)
     ) {
-        Text(label,style=MaterialTheme.typography.labelSmall,
-            color=scheme.onSurfaceVariant,maxLines=1)
+        if (!short) {
+            Text(label,style=MaterialTheme.typography.labelSmall,
+                color=scheme.onSurfaceVariant,maxLines=1)
+        }
         Text(value,modifier=Modifier.weight(1f),
             style=MaterialTheme.typography.labelMedium,
             color=scheme.onSurface,maxLines=1,
@@ -383,32 +431,29 @@ private fun CompactBranchFilter(
     }
 }
 
-/** A small tappable chip retains the existing boolean filter semantics. */
+/** Accessible icon-only photos filter fitting the rightmost 10%. */
 @Composable
-private fun FilterWithPhotosChip(
+private fun PhotosOnlyCheckbox(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
     val scheme=MaterialTheme.colorScheme
-    val shape=RoundedCornerShape(12.dp)
-    Row(
-        Modifier.clip(shape)
+    Box(
+        Modifier.size(34.dp)
+            .clip(RoundedCornerShape(9.dp))
             .background(if(checked) scheme.primaryContainer else scheme.surfaceVariant)
-            .clickable(role=Role.Checkbox,onClick={onCheckedChange(!checked)})
-            .heightIn(min=38.dp)
-            .padding(start=3.dp,end=12.dp),
-        verticalAlignment=Alignment.CenterVertically,
-        horizontalArrangement=Arrangement.spacedBy(0.dp)
-    ) {
-        Checkbox(
-            checked=checked,
-            onCheckedChange=onCheckedChange,
-            modifier=Modifier.size(36.dp).semantics {
+            .clickable(role=Role.Checkbox, onClick={onCheckedChange(!checked)})
+            .semantics {
                 contentDescription="เฉพาะสาขาที่มีรูป"
-            }
+                stateDescription=if(checked) "เปิด" else "ปิด"
+            },
+        contentAlignment=Alignment.Center
+    ) {
+        Icon(
+            imageVector=if(checked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
+            contentDescription=null,
+            tint=if(checked) scheme.primary else scheme.onSurfaceVariant,
+            modifier=Modifier.size(25.dp)
         )
-        Text("มีรูปเท่านั้น",
-            style=MaterialTheme.typography.labelMedium,
-            color=if(checked) scheme.onPrimaryContainer else scheme.onSurfaceVariant)
     }
 }

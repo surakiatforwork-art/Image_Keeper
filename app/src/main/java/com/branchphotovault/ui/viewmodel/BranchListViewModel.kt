@@ -16,13 +16,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class BranchListUiState(
     val searchText: String = "",
-    val selectedAccount: String? = null,
+    val selectedAccounts: Set<String> = emptySet(),
     val sortOption: BranchSortOption = BranchSortOption.ACCOUNT,
     val onlyWithPhotos: Boolean = false,
     val branches: List<BranchListItem> = emptyList(),
@@ -41,7 +42,7 @@ class BranchListViewModel(
 
     private data class InputsState(
         val searchText: String,
-        val selectedAccount: String?,
+        val selectedAccounts: Set<String>,
         val sortOption: BranchSortOption,
         val isSyncing: Boolean,
         val message: String?
@@ -53,9 +54,12 @@ class BranchListViewModel(
     private val searchText = MutableStateFlow(
         savedStateHandle["search_text"] ?: browsePreferences.getString("search_text", "").orEmpty()
     )
-    private val selectedAccount = MutableStateFlow<String?>(
-        savedStateHandle["account_filter"] ?: browsePreferences.getString("account_filter", null)
-    )
+    private val initialAccounts: Set<String> =
+        (savedStateHandle.get<ArrayList<String>>("account_filters")?.toSet()
+            ?: browsePreferences.getStringSet("account_filters", null)?.toSet()
+            ?: browsePreferences.getString("account_filter", null)?.let { setOf(it) }
+            ?: emptySet())
+    private val selectedAccounts = MutableStateFlow(initialAccounts)
     private val sortOption = MutableStateFlow(
         BranchSortOption.entries.firstOrNull {
             it.name == (
@@ -71,29 +75,33 @@ class BranchListViewModel(
     private val isSyncing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
 
-    private data class BranchFilters(val search: String, val account: String?, val sort: BranchSortOption, val withPhotos: Boolean)
+    private data class BranchFilters(val search: String, val accounts: Set<String>, val sort: BranchSortOption, val withPhotos: Boolean)
 
-    private val branchesFlow = combine(searchText, selectedAccount, sortOption, onlyWithPhotos) { search, account, sort, withPhotos ->
-        BranchFilters(search, account, sort, withPhotos)
-    }.flatMapLatest { (search, account, sort, withPhotos) ->
+    private val branchesFlow = combine(searchText, selectedAccounts, sortOption, onlyWithPhotos) { search, accounts, sort, withPhotos ->
+        BranchFilters(search, accounts, sort, withPhotos)
+    }.flatMapLatest { (search, accounts, sort, withPhotos) ->
+        // SQL still handles search/sort/photo-count; account checkbox selections
+        // are matched exactly (no substring LIKE or hand-built SQL).
         branchRepository.observeBranches(
             searchText = search,
-            accountFilter = account,
+            accountFilter = null,
             sortOption = sort,
             onlyWithPhotos = withPhotos
-        )
+        ).map { branches ->
+            if (accounts.isEmpty()) branches else branches.filter { it.account in accounts }
+        }
     }
 
     private val inputsFlow = combine(
         searchText,
-        selectedAccount,
+        selectedAccounts,
         sortOption,
         isSyncing,
         message
-    ) { search, account, sort, syncing, userMessage ->
+    ) { search, accounts, sort, syncing, userMessage ->
         InputsState(
             searchText = search,
-            selectedAccount = account,
+            selectedAccounts = accounts,
             sortOption = sort,
             isSyncing = syncing,
             message = userMessage
@@ -108,7 +116,7 @@ class BranchListViewModel(
     ) { inputs, branches, lastSyncAt, withPhotos ->
         BranchListUiState(
             searchText = inputs.searchText,
-            selectedAccount = inputs.selectedAccount,
+            selectedAccounts = inputs.selectedAccounts,
             sortOption = inputs.sortOption,
             onlyWithPhotos = withPhotos,
             branches = branches,
@@ -128,10 +136,26 @@ class BranchListViewModel(
         browsePreferences.edit().putString("search_text", value).apply()
     }
 
-    fun updateAccountFilter(value: String?) {
-        selectedAccount.value = value
-        savedStateHandle["account_filter"] = value
-        browsePreferences.edit().putString("account_filter", value).apply()
+    /**
+     * Empty set means ALL accounts; checking a row starts or expands a
+     * multi-account selection. Removing the last check returns to ALL.
+     */
+    fun toggleAccountFilter(account: String) {
+        if (account.isBlank()) return
+        val current = selectedAccounts.value
+        val updated = if (account in current) current - account else current + account
+        updateAccountFilters(updated)
+    }
+
+    fun clearAccountFilters() = updateAccountFilters(emptySet())
+
+    private fun updateAccountFilters(accounts: Set<String>) {
+        selectedAccounts.value = accounts
+        savedStateHandle["account_filters"] = ArrayList(accounts.sorted())
+        browsePreferences.edit()
+            .putStringSet("account_filters", accounts.toSet())
+            .remove("account_filter")
+            .apply()
     }
 
     fun updateSortOption(value: BranchSortOption) {
