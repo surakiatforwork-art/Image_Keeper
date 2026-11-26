@@ -48,7 +48,14 @@ fun glassBorder(): Color = MaterialTheme.colorScheme.outline.copy(alpha=.78f)
 
 @Composable
 fun GlassBackdrop(content: @Composable BoxScope.() -> Unit) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), content=content)
+    val scheme = MaterialTheme.colorScheme
+    val isDark = scheme.background.luminance() < 0.35f
+    val background = if (isDark) {
+        Brush.verticalGradient(listOf(Color(0xFF17142F), Color(0xFF121326), Color(0xFF191536)))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFFF4F2FF), Color(0xFFF8F8FF), Color(0xFFEEEAFE)))
+    }
+    Box(Modifier.fillMaxSize().background(background), content=content)
 }
 
 @Composable
@@ -93,17 +100,21 @@ fun GlassToolbar(
 ) {
     val scheme=MaterialTheme.colorScheme
     val isDark = scheme.background.luminance() < 0.35f
-    // Dark palette: deep indigo chrome; light palette: vivid purple with white content.
-    val barColor = if (isDark) scheme.primaryContainer else scheme.primary
+    // Light: blue → violet. Dark: deep navy → indigo. Readable white/chalk text.
+    val chrome = if (isDark) {
+        Brush.horizontalGradient(listOf(Color(0xFF171739), Color(0xFF27205E), Color(0xFF45258A)))
+    } else {
+        Brush.horizontalGradient(listOf(Color(0xFF2477DA), Color(0xFF5551D9), Color(0xFF8051E8)))
+    }
     val foreground = if (isDark) scheme.onPrimaryContainer else scheme.onPrimary
     TopAppBar(
         title=title,
-        modifier=modifier,
+        modifier=modifier.background(chrome),
         navigationIcon=navigationIcon,
         actions=actions,
         colors=TopAppBarDefaults.topAppBarColors(
-            containerColor=barColor,
-            scrolledContainerColor=barColor,
+            containerColor=Color.Transparent,
+            scrolledContainerColor=Color.Transparent,
             titleContentColor=foreground,
             navigationIconContentColor=foreground,
             actionIconContentColor=foreground

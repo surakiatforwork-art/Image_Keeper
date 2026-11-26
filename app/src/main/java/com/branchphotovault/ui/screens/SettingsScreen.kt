@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.branchphotovault.ui.components.AppThemePicker
+import com.branchphotovault.ui.components.KeeperUpdatesCard
 import com.branchphotovault.data.model.ImageAspectRatioOption
 import com.branchphotovault.data.model.ImageSizeOption
 import com.branchphotovault.ui.viewmodel.SettingsViewModel
@@ -83,6 +84,7 @@ fun SettingsScreen(
                 onSelected = viewModel::updateThemeMode,
                 modifier = Modifier.fillMaxWidth()
             )
+            KeeperUpdatesCard(modifier = Modifier.fillMaxWidth())
             PhotoTransferCard()
             OutlinedTextField(
                 value = uiState.baseUrl,
