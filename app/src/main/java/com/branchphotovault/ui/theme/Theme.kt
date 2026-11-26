@@ -74,7 +74,7 @@ fun BranchPhotoVaultTheme(
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window,view).apply {
-                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightStatusBars = darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
             }
         }

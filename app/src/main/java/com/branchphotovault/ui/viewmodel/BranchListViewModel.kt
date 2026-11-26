@@ -1,5 +1,8 @@
 package com.branchphotovault.ui.viewmodel
 
+import android.content.Context
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -31,7 +34,9 @@ data class BranchListUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class BranchListViewModel(
     private val branchRepository: BranchRepository,
-    settingsRepository: SettingsRepository
+    settingsRepository: SettingsRepository,
+    private val savedStateHandle: SavedStateHandle,
+    context: Context
 ) : ViewModel() {
 
     private data class InputsState(
@@ -42,10 +47,27 @@ class BranchListViewModel(
         val message: String?
     )
 
-    private val searchText = MutableStateFlow("")
-    private val selectedAccount = MutableStateFlow<String?>(null)
-    private val sortOption = MutableStateFlow(BranchSortOption.ACCOUNT)
-    private val onlyWithPhotos = MutableStateFlow(false)
+    private val browsePreferences = context.applicationContext.getSharedPreferences(
+        "keeper_branch_browse_filters_v1", Context.MODE_PRIVATE
+    )
+    private val searchText = MutableStateFlow(
+        savedStateHandle["search_text"] ?: browsePreferences.getString("search_text", "").orEmpty()
+    )
+    private val selectedAccount = MutableStateFlow<String?>(
+        savedStateHandle["account_filter"] ?: browsePreferences.getString("account_filter", null)
+    )
+    private val sortOption = MutableStateFlow(
+        BranchSortOption.entries.firstOrNull {
+            it.name == (
+                savedStateHandle.get<String>("branch_sort")
+                    ?: browsePreferences.getString("branch_sort", BranchSortOption.ACCOUNT.name)
+            )
+        } ?: BranchSortOption.ACCOUNT
+    )
+    private val onlyWithPhotos = MutableStateFlow(
+        savedStateHandle["with_photos"]
+            ?: browsePreferences.getBoolean("with_photos", false)
+    )
     private val isSyncing = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
 
@@ -102,18 +124,26 @@ class BranchListViewModel(
 
     fun updateSearch(value: String) {
         searchText.value = value
+        savedStateHandle["search_text"] = value
+        browsePreferences.edit().putString("search_text", value).apply()
     }
 
     fun updateAccountFilter(value: String?) {
         selectedAccount.value = value
+        savedStateHandle["account_filter"] = value
+        browsePreferences.edit().putString("account_filter", value).apply()
     }
 
     fun updateSortOption(value: BranchSortOption) {
         sortOption.value = value
+        savedStateHandle["branch_sort"] = value.name
+        browsePreferences.edit().putString("branch_sort", value.name).apply()
     }
 
     fun updateOnlyWithPhotos(value: Boolean) {
         onlyWithPhotos.value = value
+        savedStateHandle["with_photos"] = value
+        browsePreferences.edit().putBoolean("with_photos", value).apply()
     }
 
     fun syncBranches() {
@@ -139,12 +169,20 @@ class BranchListViewModel(
     companion object {
         fun provideFactory(
             branchRepository: BranchRepository,
-            settingsRepository: SettingsRepository
+            settingsRepository: SettingsRepository,
+            context: Context
         ): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return BranchListViewModel(branchRepository, settingsRepository) as T
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>,
+                    extras: androidx.lifecycle.viewmodel.CreationExtras
+                ): T {
+                    return BranchListViewModel(
+                        branchRepository, settingsRepository,
+                        extras.createSavedStateHandle(),
+                        context
+                    ) as T
                 }
             }
         }

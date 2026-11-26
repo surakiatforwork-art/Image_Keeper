@@ -1,6 +1,9 @@
 package com.branchphotovault.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +30,19 @@ fun BranchPhotoVaultNavHost() {
     val navController = rememberNavController()
     val container = LocalAppContainer.current
     val context = LocalContext.current
+    val workSession = remember(context) { BranchWorkSession(context) }
+
+    // The NavController itself keeps the ordinary task-switching back stack.
+    // Only fall back to the last branch if it starts on the list (cold start or
+    // manufacturer process recreation), and do not re-navigate over a restored route.
+    LaunchedEffect(navController) {
+        val savedBranch = workSession.lastBranch() ?: return@LaunchedEffect
+        if (navController.currentDestination?.route == Destination.BranchList.route) {
+            navController.navigate(
+                Destination.BranchPreview.createRoute(savedBranch.first, savedBranch.second)
+            ) { launchSingleTop = true }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -36,7 +52,8 @@ fun BranchPhotoVaultNavHost() {
             val viewModel: BranchListViewModel = viewModel(
                 factory = BranchListViewModel.provideFactory(
                     branchRepository = container.branchRepository,
-                    settingsRepository = container.settingsRepository
+                    settingsRepository = container.settingsRepository,
+                    context = context.applicationContext
                 )
             )
             BranchListScreen(
@@ -44,6 +61,7 @@ fun BranchPhotoVaultNavHost() {
                 onOpenSettings = { navController.navigate(Destination.Settings.route) },
                 onAddBranch = { navController.navigate(Destination.AddBranch.route) },
                 onOpenBranch = { account, branchCode ->
+                    workSession.rememberBranch(account, branchCode)
                     navController.navigate(Destination.BranchPreview.createRoute(account, branchCode))
                 }
             )
@@ -57,6 +75,7 @@ fun BranchPhotoVaultNavHost() {
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onBranchSaved = { account, branchCode ->
+                    workSession.rememberBranch(account, branchCode)
                     navController.navigate(
                         Destination.BranchPreview.createRoute(account, branchCode)
                     ) {
@@ -92,9 +111,16 @@ fun BranchPhotoVaultNavHost() {
                     branchCode = branchCode
                 )
             )
+            BackHandler {
+                workSession.clearBranch()
+                navController.popBackStack()
+            }
             BranchPreviewScreen(
                 viewModel = viewModel,
-                onBack = { navController.popBackStack() },
+                onBack = {
+                    workSession.clearBranch()
+                    navController.popBackStack()
+                },
                 onOpenPhoto = { photoId ->
                     navController.navigate(
                         Destination.PhotoViewer.createRoute(account, branchCode, photoId)

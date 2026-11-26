@@ -121,14 +121,25 @@ fun CapturePhotoScreen(
 
     DisposableEffect(hostView) {
         val window = context.findActivity()?.window
+        val statusBarColor = window?.statusBarColor
+        val navigationBarColor = window?.navigationBarColor
+        val controller = window?.let { WindowCompat.getInsetsController(it, hostView) }
+        val lightStatus = controller?.isAppearanceLightStatusBars
+        val lightNavigation = controller?.isAppearanceLightNavigationBars
         if (window != null) {
-            val insetsController = WindowCompat.getInsetsController(window, hostView)
             window.statusBarColor = AndroidColor.BLACK
             window.navigationBarColor = AndroidColor.BLACK
-            insetsController.isAppearanceLightStatusBars = false
-            insetsController.isAppearanceLightNavigationBars = false
+            controller?.isAppearanceLightStatusBars = false
+            controller?.isAppearanceLightNavigationBars = false
         }
-        onDispose { }
+        onDispose {
+            if (window != null) {
+                statusBarColor?.let { window.statusBarColor = it }
+                navigationBarColor?.let { window.navigationBarColor = it }
+            }
+            lightStatus?.let { controller?.isAppearanceLightStatusBars = it }
+            lightNavigation?.let { controller?.isAppearanceLightNavigationBars = it }
+        }
     }
 
     LaunchedEffect(Unit) {

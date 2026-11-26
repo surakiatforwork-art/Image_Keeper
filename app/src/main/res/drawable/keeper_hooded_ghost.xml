@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Standalone purple-hooded mascot: no raven, rain or PHANTOM text. -->
+    <path android:fillColor="#30206D"
+        android:pathData="M17,94 C19,83 14,76 18,61 C20,30 35,12 57,10 C77,8 91,24 93,38 C92,43 89,47 84,49 C95,57 96,68 92,77 L99,90 C95,95 87,95 79,92 C71,101 59,100 52,95 C40,100 29,98 17,94 Z"/>
+    <path android:fillColor="#7145D0"
+        android:pathData="M23,89 C29,78 22,65 27,49 C34,22 53,16 66,20 C77,24 85,34 88,40 C82,35 76,36 70,40 C87,45 91,60 85,73 C79,81 88,84 90,89 C78,88 74,85 69,93 C57,89 49,93 43,94 C36,91 29,93 23,89 Z"/>
+    <path android:fillColor="#9C75FF"
+        android:pathData="M25,75 C28,46 37,25 57,20 C45,31 39,44 38,57 C37,72 33,84 27,88 Z"/>
+    <path android:fillColor="#1B1650"
+        android:pathData="M67,25 C80,27 90,36 91,44 C84,42 77,43 73,47 C84,52 90,64 85,73 C88,60 79,51 68,50 C63,42 67,32 67,25 Z"/>
+    <path android:fillColor="#A84EEC"
+        android:pathData="M44,88 C54,95 68,89 75,79 L83,91 C70,101 58,100 44,92 Z"/>
+    <!-- Clear white face and big glossy purple eyes -->
+    <path android:fillColor="#FBF7FF"
+        android:pathData="M38,43 C45,33 61,32 71,41 C81,50 80,69 70,78 C59,86 43,81 37,70 C32,61 32,51 38,43 Z"/>
+    <path android:fillColor="#E8D9FF"
+        android:pathData="M38,68 C44,78 57,81 69,75 C61,86 47,84 40,77 Z"/>
+    <path android:fillColor="#241145"
+        android:pathData="M44,54 C47,48 53,48 56,55 C60,65 54,70 49,68 C44,66 42,60 44,54 Z"/>
+    <path android:fillColor="#39145F"
+        android:pathData="M62,54 C65,48 71,49 73,56 C76,66 70,70 66,67 C62,65 60,59 62,54 Z"/>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M48,53 C51,50 53,53 52,56 C50,59 47,57 48,53 Z"/>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M65,53 C68,51 70,54 68,57 C65,58 64,56 65,53 Z"/>
+    <path android:fillColor="#E88DED"
+        android:pathData="M40,69 C41,67 44,67 45,69 C45,72 42,73 41,71 Z"/>
+    <path android:fillColor="#E88DED"
+        android:pathData="M73,68 C75,67 77,69 76,71 C74,73 72,71 73,68 Z"/>
+    <path android:strokeColor="#39184C" android:strokeWidth="2"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M54,70 C58,74 62,74 65,69"/>
+    <path android:fillColor="#C49BFF"
+        android:pathData="M53,87 L58,81 L63,87 L58,94 Z"/>
+    <path android:fillColor="#52329C"
+        android:pathData="M58,82 L62,87 L58,93 Z"/>
+    <path android:fillColor="#E9DCFF"
+        android:pathData="M30,33 L32,29 L34,33 L38,35 L34,37 L32,41 L30,37 L26,35 Z"/>
+</vector>

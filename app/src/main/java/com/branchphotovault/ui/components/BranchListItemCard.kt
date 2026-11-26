@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,44 +20,69 @@ import com.branchphotovault.data.model.BranchListItem
 
 @Composable
 fun BranchListItemCard(
-    branch:BranchListItem,
-    onClick:()->Unit,
-    modifier:Modifier=Modifier
+    branch: BranchListItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    GlassCard(modifier.fillMaxWidth().clickable(onClick=onClick)) {
+    val scheme = MaterialTheme.colorScheme
+    GlassCard(modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment=Alignment.CenterVertically,
-            horizontalArrangement=Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
-                Modifier.size(44.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant,
-                        RoundedCornerShape(12.dp)),
-                contentAlignment=Alignment.Center
+                modifier = Modifier.size(48.dp)
+                    .background(scheme.primaryContainer, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Outlined.Storefront,null,Modifier.size(22.dp),
-                    tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    Icons.Outlined.Storefront,
+                    contentDescription = null,
+                    tint = scheme.primary,
+                    modifier = Modifier.size(25.dp)
+                )
             }
-            Column(Modifier.weight(1f),
-                verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                Text(branch.shopName,
-                    style=MaterialTheme.typography.titleMedium,
-                    color=MaterialTheme.colorScheme.onSurface,
-                    maxLines=1,overflow=TextOverflow.Ellipsis)
-                Text("${branch.account} · ${branch.branchCode}",
-                    style=MaterialTheme.typography.bodySmall,
-                    color=MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines=1,overflow=TextOverflow.Ellipsis)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = branch.shopName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${branch.account} · ${branch.branchCode}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.PhotoLibrary,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = scheme.primary
+                    )
+                    Text(
+                        text = "${branch.photoCount} รูป",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant
+                    )
+                }
             }
-            Column(horizontalAlignment=Alignment.End,
-                verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                Text(branch.photoCount.toString(),
-                    style=MaterialTheme.typography.titleMedium,
-                    color=MaterialTheme.colorScheme.onSurface)
-                Text("รูป",style=MaterialTheme.typography.labelSmall,
-                    color=MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Icon(
+                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = "เปิดสาขา",
+                tint = scheme.onSurfaceVariant
+            )
         }
     }
 }

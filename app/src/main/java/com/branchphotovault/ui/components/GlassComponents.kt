@@ -96,11 +96,11 @@ fun GlassToolbar(
         navigationIcon=navigationIcon,
         actions=actions,
         colors=TopAppBarDefaults.topAppBarColors(
-            containerColor=MaterialTheme.colorScheme.background,
-            scrolledContainerColor=MaterialTheme.colorScheme.background,
-            titleContentColor=MaterialTheme.colorScheme.onSurface,
-            navigationIconContentColor=MaterialTheme.colorScheme.onSurfaceVariant,
-            actionIconContentColor=MaterialTheme.colorScheme.onSurfaceVariant
+            containerColor=MaterialTheme.colorScheme.primary,
+            scrolledContainerColor=MaterialTheme.colorScheme.primary,
+            titleContentColor=MaterialTheme.colorScheme.onPrimary,
+            navigationIconContentColor=MaterialTheme.colorScheme.onPrimary,
+            actionIconContentColor=MaterialTheme.colorScheme.onPrimary
         )
     )
 }

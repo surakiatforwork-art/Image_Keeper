@@ -60,19 +60,19 @@ fun GallerySortDropdown(
                 Icons.Outlined.Sort,
                 contentDescription = "จัดเรียงภาพ",
                 modifier = Modifier.size(20.dp),
-                tint = scheme.onSurfaceVariant
+                tint = scheme.onPrimary
             )
             Text(
                 if (config.sort == GalleryPhotoSort.NEWEST_FIRST) "ล่าสุด" else "เก่าสุด",
                 style = MaterialTheme.typography.labelMedium,
-                color = scheme.onSurface,
+                color = scheme.onPrimary,
                 maxLines = 1
             )
             Icon(
                 Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = scheme.onSurfaceVariant
+                tint = scheme.onPrimary
             )
         }
         DropdownMenu(

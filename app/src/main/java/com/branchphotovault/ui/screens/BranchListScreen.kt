@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
@@ -59,15 +60,15 @@ fun BranchListScreen(
                         verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(12.dp)
                     ) {
-                        Image(painterResource(R.drawable.keeper_brand),
+                        Image(painterResource(R.drawable.keeper_hooded_ghost),
                             contentDescription=null,modifier=Modifier.size(36.dp))
                         Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
                             Text("Image Keeper",
                                 style=MaterialTheme.typography.titleMedium,
                                 maxLines=1,overflow=TextOverflow.Ellipsis)
-                            Text("คลังภาพตามสาขา",
+                            Text("Branch Photo Vault",
                                 style=MaterialTheme.typography.labelSmall,
-                                color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                color=MaterialTheme.colorScheme.onPrimary.copy(alpha=.84f))
                         }
                     }
                 },
@@ -192,10 +193,19 @@ private fun BranchListContent(
                             style=MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        "${uiState.branches.size} สาขา",
+                        "ทั้งหมด ${uiState.branches.size} สาขา",
                         style=MaterialTheme.typography.labelMedium,
                         color=MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                Row(
+                    modifier=Modifier.fillMaxWidth().padding(top=4.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Outlined.Storefront, contentDescription=null,
+                        tint=MaterialTheme.colorScheme.primary, modifier=Modifier.size(20.dp))
+                    Text("รายการสาขา", style=MaterialTheme.typography.titleMedium)
                 }
                 val lastSyncText=uiState.lastSyncAt?.let {
                     DateFormat.getMediumDateFormat(context).format(Date(it))+" · "+
