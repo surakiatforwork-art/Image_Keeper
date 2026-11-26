@@ -60,8 +60,8 @@ fun BranchListScreen(
                         verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(12.dp)
                     ) {
-                        Image(painterResource(R.drawable.keeper_hooded_ghost),
-                            contentDescription=null,modifier=Modifier.size(36.dp))
+                        Image(painterResource(R.drawable.keeper_brand),
+                            contentDescription="Image Keeper",modifier=Modifier.size(40.dp))
                         Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
                             Text("Image Keeper",
                                 style=MaterialTheme.typography.titleMedium,
