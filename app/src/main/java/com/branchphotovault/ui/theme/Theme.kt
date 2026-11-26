@@ -74,7 +74,9 @@ fun BranchPhotoVaultTheme(
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window,view).apply {
-                isAppearanceLightStatusBars = darkTheme
+                // The toolbar is blue in light mode and deep navy-blue in dark mode:
+                // both need white status-bar glyphs; navigation follows theme contrast.
+                isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = !darkTheme
             }
         }

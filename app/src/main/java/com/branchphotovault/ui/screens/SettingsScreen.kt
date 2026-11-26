@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.branchphotovault.ui.components.AppThemePicker
 import com.branchphotovault.data.model.ImageAspectRatioOption
 import com.branchphotovault.data.model.ImageSizeOption
 import com.branchphotovault.ui.viewmodel.SettingsViewModel
@@ -46,6 +47,7 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.message) {
@@ -76,6 +78,11 @@ fun SettingsScreen(
                 .padding(horizontal=16.dp,vertical=16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            AppThemePicker(
+                selected = selectedTheme,
+                onSelected = viewModel::updateThemeMode,
+                modifier = Modifier.fillMaxWidth()
+            )
             PhotoTransferCard()
             OutlinedTextField(
                 value = uiState.baseUrl,

@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -90,17 +91,22 @@ fun GlassToolbar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    val scheme=MaterialTheme.colorScheme
+    val isDark = scheme.background.luminance() < 0.35f
+    // Dark palette: navy chrome with sky-blue content; light palette: blue with white content.
+    val barColor = if (isDark) scheme.primaryContainer else scheme.primary
+    val foreground = if (isDark) scheme.onPrimaryContainer else scheme.onPrimary
     TopAppBar(
         title=title,
         modifier=modifier,
         navigationIcon=navigationIcon,
         actions=actions,
         colors=TopAppBarDefaults.topAppBarColors(
-            containerColor=MaterialTheme.colorScheme.primary,
-            scrolledContainerColor=MaterialTheme.colorScheme.primary,
-            titleContentColor=MaterialTheme.colorScheme.onPrimary,
-            navigationIconContentColor=MaterialTheme.colorScheme.onPrimary,
-            actionIconContentColor=MaterialTheme.colorScheme.onPrimary
+            containerColor=barColor,
+            scrolledContainerColor=barColor,
+            titleContentColor=foreground,
+            navigationIconContentColor=foreground,
+            actionIconContentColor=foreground
         )
     )
 }

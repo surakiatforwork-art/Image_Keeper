@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.branchphotovault.data.repository.BranchRepository
 import com.branchphotovault.data.repository.PhotoRepository
 import com.branchphotovault.data.repository.SettingsRepository
+import com.branchphotovault.data.model.AppThemeMode
 import com.branchphotovault.data.model.ImageAspectRatioOption
 import com.branchphotovault.data.model.ImageSizeOption
 import com.branchphotovault.util.AppConfig
@@ -59,6 +60,23 @@ class SettingsViewModel(
     private val isCheckingApi = MutableStateFlow(false)
     private val isCleaningUp = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
+
+    // Immediate-update preference, separate from the settings 'save' form.
+    val themeMode: StateFlow<AppThemeMode> = settingsRepository.appThemeModeFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = AppThemeMode.SYSTEM
+    )
+
+    fun updateThemeMode(value: AppThemeMode) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.setAppThemeMode(value)
+            } catch (error: Exception) {
+                message.value = error.message ?: "ไม่สามารถเปลี่ยนธีมได้"
+            }
+        }
+    }
 
     init {
         viewModelScope.launch {

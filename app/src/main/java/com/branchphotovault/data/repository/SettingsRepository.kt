@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.branchphotovault.data.model.AppThemeMode
 import com.branchphotovault.data.model.ImageAspectRatioOption
 import com.branchphotovault.data.model.ImageSizeOption
 import com.branchphotovault.util.AppConfig
@@ -25,6 +26,19 @@ class SettingsRepository(private val context: Context) {
         val imageLongEdge = intPreferencesKey("image_long_edge")
         val imageAspectRatioKey = stringPreferencesKey("image_aspect_ratio_key")
         val lastCameraLensFacing = intPreferencesKey("last_camera_lens_facing")
+        val appThemeMode = stringPreferencesKey("app_theme_mode")
+    }
+
+    // A single DataStore flow drives the entire Material3 color scheme.
+    // Invalid future/legacy values fail safely to the Android system setting.
+    val appThemeModeFlow: Flow<AppThemeMode> = context.settingsDataStore.data.map { preferences ->
+        AppThemeMode.fromStored(preferences[Keys.appThemeMode])
+    }
+
+    suspend fun setAppThemeMode(value: AppThemeMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Keys.appThemeMode] = value.name
+        }
     }
 
     val baseUrlFlow: Flow<String> = context.settingsDataStore.data.map { preferences ->
