@@ -164,6 +164,9 @@ class ImageProcessor(private val context: Context) {
         forcePortrait: Boolean,
         mirrorHorizontally: Boolean = false
     ): Bitmap {
+        RustImageEngine.transform(bitmap, exifOrientation, aspectRatioOption, forcePortrait, mirrorHorizontally)?.let {
+            return scaleBitmap(it, longEdge)
+        }
         val oriented = applyExifOrientation(bitmap, exifOrientation)
         val normalized = if (forcePortrait) {
             normalizeCapturedPortrait(oriented, exifOrientation)
