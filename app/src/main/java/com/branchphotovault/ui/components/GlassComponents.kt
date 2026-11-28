@@ -233,7 +233,8 @@ fun GlassDialog(
 
 @Composable
 fun GlassSearchBar(
-    value: String,onValueChange: (String) -> Unit,modifier: Modifier = Modifier
+    value: String,onValueChange: (String) -> Unit,modifier: Modifier = Modifier,
+    onSearch: (() -> Unit)? = null
 ) {
     val keyboard=LocalSoftwareKeyboardController.current
     val shape=RoundedCornerShape(27.dp)
@@ -252,21 +253,23 @@ fun GlassSearchBar(
         ),
         cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),
-        keyboardActions=KeyboardActions(onSearch={keyboard?.hide()}),
+        keyboardActions=KeyboardActions(onSearch={if(onSearch!=null) onSearch() else keyboard?.hide()}),
         modifier=modifier.heightIn(min=58.dp)
             .clip(shape).background(fill)
             .border(1.dp,if(dark) Color(0xFF656394) else Color(0xFFD7D0F4),shape),
         decorationBox={field->
             Row(
-                Modifier.fillMaxWidth().heightIn(min=58.dp).padding(start=17.dp),
+                Modifier.fillMaxWidth().heightIn(min=58.dp).padding(start=if(onSearch!=null) 10.dp else 17.dp),
                 verticalAlignment=Alignment.CenterVertically
             ) {
-                Icon(Icons.Outlined.Search,null,Modifier.size(20.dp),
-                    tint=MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(12.dp))
+                if(onSearch==null) {
+                    Icon(Icons.Outlined.Search,null,Modifier.size(20.dp),
+                        tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(12.dp))
+                }
                 Box(Modifier.weight(1f)) {
                     if(value.isEmpty()) Text(
-                        "ค้นหาชื่อร้าน รหัสสาขา หรือ Account",
+                        if(onSearch!=null) "ชื่อร้าน / รหัสสาขา" else "ค้นหาชื่อร้าน รหัสสาขา หรือ Account",
                         style=MaterialTheme.typography.bodySmall,
                         color=MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines=1,overflow=TextOverflow.Ellipsis
@@ -274,10 +277,15 @@ fun GlassSearchBar(
                     field()
                 }
                 if(value.isNotEmpty()) {
-                    IconButton(onClick={onValueChange("")}) {
+                    IconButton(onClick={onValueChange("")},modifier=Modifier.size(40.dp)) {
                         Icon(Icons.Outlined.Close,"ล้างคำค้นหา",Modifier.size(20.dp))
                     }
-                } else Spacer(Modifier.width(12.dp))
+                } else if(onSearch==null) Spacer(Modifier.width(12.dp))
+                if(onSearch!=null) {
+                    TextButton(onClick=onSearch,contentPadding=PaddingValues(horizontal=8.dp)) {
+                        Text("ค้นหา",maxLines=1,fontWeight=androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    }
+                }
             }
         }
     )

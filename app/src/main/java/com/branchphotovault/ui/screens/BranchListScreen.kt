@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
@@ -82,13 +83,16 @@ fun BranchListScreen(
         snackbar.showSnackbar(message)
         viewModel.clearMessage()
     }
-    Box(Modifier.fillMaxSize()) {
+    // Reserve the keyboard/navigation area ONCE, outside Scaffold.
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         GalleryBackgroundWaves(dark)
         Scaffold(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                GalleryRibbonHeader(
+                if (keyboardVisible) {
+                    CompactSearchHeader(uiState.branches.size, dark)
+                } else GalleryRibbonHeader(
                     dark = dark,
                     syncing = uiState.isSyncing,
                     onSync = viewModel::syncBranches,
@@ -108,6 +112,7 @@ fun BranchListScreen(
             BranchListContent(
                 uiState = uiState,
                 modifier = Modifier.padding(padding),
+                compactSearch = keyboardVisible,
                 onToggleAccountFilter = viewModel::toggleAccountFilter,
                 onClearAccountFilters = viewModel::clearAccountFilters,
                 onSortChange = viewModel::updateSortOption,
@@ -270,9 +275,10 @@ private fun GallerySearchButton(expanded: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BranchListContent(
+internal fun BranchListContent(
     uiState: BranchListUiState,
     modifier: Modifier=Modifier,
+    compactSearch: Boolean=false,
     onToggleAccountFilter: (String)->Unit,
     onClearAccountFilters: ()->Unit,
     onSortChange: (BranchSortOption)->Unit,
@@ -286,12 +292,19 @@ private fun BranchListContent(
     val filtered=uiState.searchText.isNotBlank() ||
         uiState.selectedAccounts.isNotEmpty() || uiState.onlyWithPhotos
 
+    val browseState=rememberLazyListState()
+    val searchState=rememberLazyListState()
+    LaunchedEffect(compactSearch,uiState.searchText) {
+        if(compactSearch) searchState.scrollToItem(0)
+        else if(uiState.searchText.isNotBlank()) browseState.scrollToItem(0)
+    }
     LazyColumn(
+        state=if(compactSearch) searchState else browseState,
         modifier=modifier.fillMaxSize(),
-        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=15.dp,bottom=16.dp),
-        verticalArrangement=Arrangement.spacedBy(12.dp)
+        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=if(compactSearch) 6.dp else 15.dp,bottom=if(compactSearch) 4.dp else 16.dp),
+        verticalArrangement=if(compactSearch) Arrangement.spacedBy(8.dp,Alignment.Bottom) else Arrangement.spacedBy(12.dp)
     ) {
-        item {
+        if(!compactSearch) item {
             Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 // 60% Filter | 30% Sort | 10% Photos only, all on one row.
                 Row(
@@ -396,7 +409,7 @@ private fun BranchListContent(
         if(uiState.branches.isEmpty()) {
             item {
                 Column(
-                    Modifier.fillMaxWidth().padding(top=64.dp,bottom=40.dp),
+                    Modifier.fillMaxWidth().padding(top=if(compactSearch) 8.dp else 64.dp,bottom=if(compactSearch) 8.dp else 40.dp),
                     horizontalAlignment=Alignment.CenterHorizontally,
                     verticalArrangement=Arrangement.spacedBy(12.dp)
                 ) {
@@ -424,6 +437,20 @@ private fun BranchListContent(
 }
 
 
+@Composable
+private fun CompactSearchHeader(count: Int, dark: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().background(if(dark) Color(0xFF211E40) else Color(0xFFF4F0FF))
+            .statusBarsPadding().height(36.dp).padding(horizontal=16.dp),
+        horizontalArrangement=Arrangement.SpaceBetween,
+        verticalAlignment=Alignment.CenterVertically
+    ) {
+        Text("ผลการค้นหา", style=MaterialTheme.typography.labelLarge)
+        Text("$count สาขา", style=MaterialTheme.typography.labelMedium,
+            color=MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 /** A floating search button that reveals the search field toward the left. */
 @Composable
 internal fun GallerySearchDock(
@@ -437,10 +464,14 @@ internal fun GallerySearchDock(
     val keyboard=LocalSoftwareKeyboardController.current
     val focus=LocalFocusManager.current
 
-    fun closeSearch() {
+    fun submitSearch() {
         focusOnOpen=false
         keyboard?.hide()
         focus.clearFocus()
+    }
+
+    fun closeSearch() {
+        submitSearch()
         onValueChange("")
         expanded=false
     }
@@ -457,9 +488,7 @@ internal fun GallerySearchDock(
     }
     Row(
         Modifier.fillMaxWidth()
-            .navigationBarsPadding()
-            .imePadding()
-            .padding(start=14.dp,end=16.dp,top=8.dp,bottom=12.dp),
+            .padding(start=14.dp,end=16.dp,top=if(keyboardVisible) 4.dp else 8.dp,bottom=if(keyboardVisible) 4.dp else 12.dp),
         verticalAlignment=Alignment.CenterVertically
     ) {
         Box(Modifier.weight(1f),contentAlignment=Alignment.CenterEnd) {
@@ -471,7 +500,8 @@ internal fun GallerySearchDock(
                 GlassSearchBar(
                     value=value,
                     onValueChange=onValueChange,
-                    modifier=Modifier.fillMaxWidth().focusRequester(requester)
+                    modifier=Modifier.fillMaxWidth().focusRequester(requester),
+                    onSearch={submitSearch()}
                 )
             }
         }
