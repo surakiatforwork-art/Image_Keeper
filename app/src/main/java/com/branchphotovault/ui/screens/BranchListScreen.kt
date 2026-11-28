@@ -1,6 +1,13 @@
 package com.branchphotovault.ui.screens
 
 import android.text.format.DateFormat
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,20 +24,27 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +62,7 @@ import com.branchphotovault.ui.viewmodel.AddBranchViewModel
 import com.branchphotovault.ui.viewmodel.BranchListUiState
 import com.branchphotovault.ui.viewmodel.BranchListViewModel
 import java.util.Date
+import kotlinx.coroutines.delay
 
 /** Real implementation of the selected Ghost Gallery mockup, both light and dark. */
 @Composable
@@ -77,18 +92,16 @@ fun BranchListScreen(
                     dark = dark,
                     syncing = uiState.isSyncing,
                     onSync = viewModel::syncBranches,
-                    onSettings = onOpenSettings
+                    onSettings = onOpenSettings,
+                    onAddBranch = onAddBranch
                 )
             },
             bottomBar = {
-                GallerySearchBottomBar(
+                GallerySearchDock(
                     value = uiState.searchText,
                     onValueChange = viewModel::updateSearch,
-                    dark = dark
+                    keyboardVisible = keyboardVisible
                 )
-            },
-            floatingActionButton = {
-                if (!keyboardVisible) GalleryAddButton(onAddBranch)
             },
             snackbarHost = { SnackbarHost(hostState = snackbar) }
         ) { padding ->
@@ -106,11 +119,12 @@ fun BranchListScreen(
 }
 
 @Composable
-private fun GalleryRibbonHeader(
+internal fun GalleryRibbonHeader(
     dark: Boolean,
     syncing: Boolean,
     onSync: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onAddBranch: () -> Unit
 ) {
     var overflowExpanded by remember { mutableStateOf(false) }
     val gradient = if (dark) {
@@ -158,7 +172,7 @@ private fun GalleryRibbonHeader(
                 Text("Branch Photo Vault", style=MaterialTheme.typography.bodySmall,
                     color=Color.White.copy(alpha=.85f))
             }
-            // Both legacy header actions live in one 3-dot overflow menu.
+            // Keep secondary actions together; the floating button is for search.
             Box {
                 IconButton(onClick={overflowExpanded=true}) {
                     Icon(
@@ -172,6 +186,14 @@ private fun GalleryRibbonHeader(
                     expanded=overflowExpanded,
                     onDismissRequest={overflowExpanded=false}
                 ) {
+                    DropdownMenuItem(
+                        text={Text("เพิ่มรายการร้าน")},
+                        leadingIcon={Icon(Icons.Rounded.Add,contentDescription=null)},
+                        onClick={
+                            overflowExpanded=false
+                            onAddBranch()
+                        }
+                    )
                     DropdownMenuItem(
                         text={Text(if(syncing) "กำลังรีเฟรช..." else "รีเฟรชรายการสาขา")},
                         leadingIcon={
@@ -230,17 +252,20 @@ private fun GalleryBackgroundWaves(dark: Boolean) {
 }
 
 @Composable
-private fun GalleryAddButton(onClick: () -> Unit) {
+private fun GallerySearchButton(expanded: Boolean, onClick: () -> Unit) {
     val shape=RoundedCornerShape(22.dp)
     Box(
         Modifier.size(61.dp).shadow(12.dp,shape).clip(shape)
             .background(Brush.linearGradient(listOf(
                 Color(0xFFAB73FF),Color(0xFF744BEA),Color(0xFF5136CB))))
-            .clickable(onClick=onClick),
+            .clickable(role=Role.Button,onClick=onClick),
         contentAlignment=Alignment.Center
     ) {
-        Icon(Icons.Rounded.Add,contentDescription="เพิ่มสาขา",
-            tint=Color.White,modifier=Modifier.size(35.dp))
+        Icon(
+            if (expanded) Icons.Rounded.Close else Icons.Rounded.Search,
+            contentDescription=if (expanded) "ปิดการค้นหา" else "ค้นหาร้าน",
+            tint=Color.White,modifier=Modifier.size(30.dp)
+        )
     }
 }
 
@@ -263,7 +288,7 @@ private fun BranchListContent(
 
     LazyColumn(
         modifier=modifier.fillMaxSize(),
-        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=15.dp,bottom=90.dp),
+        contentPadding=PaddingValues(start=16.dp,end=16.dp,top=15.dp,bottom=16.dp),
         verticalArrangement=Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -399,32 +424,65 @@ private fun BranchListContent(
 }
 
 
-/** Fixed search toolbar, placed above gesture navigation and the keyboard. */
+/** A floating search button that reveals the search field toward the left. */
 @Composable
-private fun GallerySearchBottomBar(
+internal fun GallerySearchDock(
     value: String,
     onValueChange: (String) -> Unit,
-    dark: Boolean
+    keyboardVisible: Boolean
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val line = if (dark) Color(0xFF4D447E) else Color(0xFFE2DAFA)
-    Surface(
-        color=if (dark) Color(0xFF211E40) else Color(0xFFF9F7FF),
-        shadowElevation=10.dp,
-        tonalElevation=0.dp
-    ) {
-        Column(
-            Modifier.fillMaxWidth()
-                .border(width=0.5.dp,color=line)
-                .navigationBarsPadding()
-                .padding(start=14.dp,end=14.dp,top=9.dp,bottom=9.dp)
-        ) {
-            GlassSearchBar(
-                value=value,
-                onValueChange=onValueChange,
-                modifier=Modifier.fillMaxWidth()
-            )
+    var expanded by rememberSaveable { mutableStateOf(value.isNotEmpty()) }
+    var focusOnOpen by remember { mutableStateOf(false) }
+    val requester=remember { FocusRequester() }
+    val keyboard=LocalSoftwareKeyboardController.current
+    val focus=LocalFocusManager.current
+
+    fun closeSearch() {
+        focusOnOpen=false
+        keyboard?.hide()
+        focus.clearFocus()
+        onValueChange("")
+        expanded=false
+    }
+
+    BackHandler(enabled=expanded && !keyboardVisible) { closeSearch() }
+    LaunchedEffect(expanded,focusOnOpen) {
+        if (expanded && focusOnOpen) {
+            // Let the field finish sliding into position before showing the IME.
+            delay(240)
+            requester.requestFocus()
+            keyboard?.show()
+            focusOnOpen=false
         }
+    }
+    Row(
+        Modifier.fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(start=14.dp,end=16.dp,top=8.dp,bottom=12.dp),
+        verticalAlignment=Alignment.CenterVertically
+    ) {
+        Box(Modifier.weight(1f),contentAlignment=Alignment.CenterEnd) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible=expanded,
+                enter=expandHorizontally(tween(220),expandFrom=Alignment.End)+fadeIn(tween(180)),
+                exit=shrinkHorizontally(tween(180),shrinkTowards=Alignment.End)+fadeOut(tween(120))
+            ) {
+                GlassSearchBar(
+                    value=value,
+                    onValueChange=onValueChange,
+                    modifier=Modifier.fillMaxWidth().focusRequester(requester)
+                )
+            }
+        }
+        if (expanded) Spacer(Modifier.width(8.dp))
+        GallerySearchButton(expanded=expanded,onClick={
+            if(expanded) closeSearch()
+            else {
+                expanded=true
+                focusOnOpen=true
+            }
+        })
     }
 }
 
