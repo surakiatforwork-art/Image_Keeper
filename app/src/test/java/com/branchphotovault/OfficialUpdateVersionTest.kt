@@ -17,6 +17,13 @@ class OfficialUpdateVersionTest {
         assertEquals(-1, GithubReleaseUpdater.compareVersions("v1.3.99", "1.4.0"))
     }
 
+    @Test fun stableSupersedesSameBaseBeta() {
+        assertEquals(1, GithubReleaseUpdater.compareVersions("v1.4.9", "1.4.9-beta.1"))
+        assertEquals(-1, GithubReleaseUpdater.compareVersions("v1.4.9-beta.1", "1.4.9"))
+        assertEquals(1, GithubReleaseUpdater.compareVersions("v1.4.10", "1.4.9-beta.1"))
+        assertEquals(0, GithubReleaseUpdater.compareVersions("v1.4.9", "1.4.9+build.66"))
+    }
+
     @Test fun rejectsUnknownVersionSyntaxWithoutInventingUpdates() {
         assertEquals(0, GithubReleaseUpdater.compareVersions("bad-tag", "1.4.3"))
         assertEquals(0, GithubReleaseUpdater.compareVersions("v1.4.3", "invalid"))

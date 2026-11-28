@@ -45,6 +45,11 @@ class OfficialUpdateParsingTest {
         assertFalse(GithubReleaseUpdater.parseRelease(example(tag="v1.4.2"), "1.4.3").newer)
     }
 
+    @Test fun stableReleaseIsNewerThanSameBaseBeta() {
+        assertTrue(GithubReleaseUpdater.parseRelease(example(tag="v1.4.9"), "1.4.9-beta.1").newer)
+        assertTrue(GithubReleaseUpdater.parseRelease(example(tag="v1.4.10"), "1.4.9-beta.1").newer)
+    }
+
     @Test fun rejectsPrereleaseWrongHostAndMissingDigest() {
         for (text in listOf(
             example(prerelease = true),

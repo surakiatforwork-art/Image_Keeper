@@ -218,6 +218,10 @@ class GithubReleaseUpdater(private val context: Context) {
             val a = parts(remote) ?: return 0
             val b = parts(current) ?: return 0
             for (i in 0..2) if (a[i] != b[i]) return a[i].compareTo(b[i])
+            // A stable version is newer than a prerelease of the same base version.
+            val remotePre = remote.substringBefore("+").contains('-')
+            val currentPre = current.substringBefore("+").contains('-')
+            if (remotePre != currentPre) return if (remotePre) -1 else 1
             return 0
         }
     }
